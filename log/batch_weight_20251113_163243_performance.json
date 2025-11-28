@@ -1,0 +1,153 @@
+{
+  "queries": [
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.158,
+      "row_count": 1,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:38.228942",
+      "query_preview": "\n        WITH gdp_data AS (\n            SELECT\n                time_value,\n                data_value as gdp_growth,\n                LAG(data_value, 1) OVER (ORDER BY time_value) as prev_gdp,\n        ..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.153,
+      "row_count": 90,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:38.460828",
+      "query_preview": "\n        SELECT\n            data_value,\n            time_value\n        FROM bok_economic_indicators\n        WHERE stat_code = '722Y001'\n            AND cycle = 'D'\n        ORDER BY time_value DESC\n   ..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.159,
+      "row_count": 3,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:38.693648",
+      "query_preview": "\n        SELECT\n            data_value\n        FROM bok_economic_indicators\n        WHERE stat_code = '513Y001'\n            AND item_name1 LIKE '%경제심리지수%'\n            AND cycle = 'M'\n        ORDER BY ..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.157,
+      "row_count": 30,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:38.927185",
+      "query_preview": "\n        SELECT\n            data_value,\n            time_value\n        FROM exchange_rate\n        WHERE stat_code = '731Y001'\n            AND item_code1 = '0000001'\n            AND cycle = 'D'\n       ..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.153,
+      "row_count": 4,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:39.157002",
+      "query_preview": "\n        SELECT\n            data_value,\n            time_value\n        FROM bok_economic_indicators\n        WHERE stat_code = '901Y009'\n            AND cycle = 'M'\n        ORDER BY time_value DESC\n   ..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.158,
+      "row_count": 1,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:39.392371",
+      "query_preview": "\n            WITH market_data AS (\n                SELECT\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                    LAG(close, 60) OVER (..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 0.084,
+      "row_count": 1,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.49,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-13T16:32:39.553022",
+      "query_preview": "\n            WITH market_data AS (\n                SELECT\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                    LAG(close, 60) OVER (..."
+    },
+    {
+      "name": "Unnamed Query",
+      "execution_time": 1.14,
+      "row_count": 163,
+      "memory_start_mb": 86.49,
+      "memory_end_mb": 86.5,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-13T16:32:40.770286",
+      "query_preview": "\n        WITH stock_returns AS (\n            SELECT\n                d.industry,\n                i.symbol,\n                i.date,\n                i.close,\n                LAG(i.close, 20) OVER (PARTIT..."
+    },
+    {
+      "name": "Query 1: Basic Info",
+      "execution_time": 0.404,
+      "row_count": 2647,
+      "memory_start_mb": 86.5,
+      "memory_end_mb": 86.59,
+      "memory_delta_mb": 0.09,
+      "timestamp": "2025-11-13T16:32:41.254684",
+      "query_preview": "\n        SELECT symbol, exchange, industry, theme\n        FROM kr_stock_detail\n        WHERE symbol = ANY($1)\n        "
+    },
+    {
+      "name": "Query 2: Combined Market Data (Latest + Liquidity + Volatility)",
+      "execution_time": 2.241,
+      "row_count": 2761,
+      "memory_start_mb": 86.59,
+      "memory_end_mb": 86.6,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-13T16:32:43.577744",
+      "query_preview": "\n        WITH latest_data AS (\n            SELECT DISTINCT ON (symbol)\n                symbol,\n                market_cap,\n                close,\n                date\n            FROM kr_intraday_tota..."
+    }
+  ],
+  "phases": {
+    "phase1": 2.779792,
+    "phase2": 2.823718,
+    "phase2_5": 0.017251,
+    "phase3": 0.105464
+  },
+  "memory_snapshots": [
+    {
+      "label": "Start",
+      "timestamp": "2025-11-13T16:32:38.070479",
+      "rss_mb": 86.49,
+      "vms_mb": 430.21,
+      "percent": 0.55
+    },
+    {
+      "label": "After Phase 1",
+      "timestamp": "2025-11-13T16:32:40.850463",
+      "rss_mb": 86.5,
+      "vms_mb": 430.22,
+      "percent": 0.55
+    },
+    {
+      "label": "After Phase 2",
+      "timestamp": "2025-11-13T16:32:43.674415",
+      "rss_mb": 86.6,
+      "vms_mb": 430.28,
+      "percent": 0.55
+    },
+    {
+      "label": "After Phase 2.5",
+      "timestamp": "2025-11-13T16:32:43.691889",
+      "rss_mb": 87.14,
+      "vms_mb": 430.39,
+      "percent": 0.55
+    },
+    {
+      "label": "After Phase 3",
+      "timestamp": "2025-11-13T16:32:43.797555",
+      "rss_mb": 87.14,
+      "vms_mb": 430.39,
+      "percent": 0.55
+    }
+  ],
+  "start_time": "2025-11-13T16:32:38.070379",
+  "end_time": "2025-11-13T16:32:43.797607",
+  "total_time": 5.727228,
+  "total_stocks": 2761,
+  "processed_stocks": 2647,
+  "skipped_stocks": 114
+}

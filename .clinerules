@@ -1,0 +1,259 @@
+# Quant Analysis Project Rules
+
+## Database Information
+- Database: PostgreSQL (Railway)
+- Korean stock tables: 17 tables (kr_*)
+- US stock tables: 35 tables (us_*)
+- Common tables: 2 tables (market_index, bok_economic_indicators)
+- Schema details: See kr_SQL_table_info.csv and us_SQL_table_info.csv
+
+## Work Process Rules
+1. **Multi-perspective Analysis**: Analyze requests from multiple angles and suggest various solution approaches
+2. **Comparative Analysis**: Compare and analyze the user's request with Claude's proposed solution
+3. **Clarify Broad Requests**: If a request is too broad or vague, DO NOT execute immediately. Instead, propose methods to break it down into clear, specific steps
+4. **Divide Large Tasks**: If coding requires too much work at once, suggest ways to effectively divide it into manageable stages for step-by-step completion
+5. **Never Distort Requests**: NEVER distort, reduce, summarize, or optimize the original request. Execute exactly as requested
+6. **Pre-work Confirmation**: Before starting work, thoroughly explain WHAT will be coded and HOW, then get confirmation to proceed
+7. **Monitor Work Consistency**: Always check if actual work matches the explained plan. If any discrepancy is found, IMMEDIATELY stop work, explain what will be done, and get confirmation before proceeding
+
+## CRITICAL: Code Modification Protocol (MANDATORY)
+
+BEFORE using Edit, Write, or NotebookEdit tools, you MUST follow this exact sequence:
+
+1. **STOP** - Do NOT modify code immediately
+2. **EXPLAIN** - Clearly state:
+   - What is the problem or requirement
+   - What will be changed (which files, which sections)
+   - How it will be changed (the approach and logic)
+
+   **MUST include these three sections:**
+
+   **변경 사항 (Changes):**
+   - List ALL specific code changes with before/after examples
+   - Example format:
+     1. Function signature: `def foo()` → `async def foo()`
+     2. Database call: `cursor.execute(query)` → `await conn.fetch(query)`
+     3. Import addition: Add `import asyncio`
+
+   **영향 범위 (Impact Scope):**
+   - Which other functions/files will be affected
+   - What calling code needs to be updated
+   - Which tests need to be modified
+   - Example: "execute_query()를 호출하는 모든 메서드에서 await 사용 필요"
+
+   **부작용 (Side Effects):**
+   - Any unintended consequences or additional changes
+   - Performance implications (positive or negative)
+   - Breaking changes or backward compatibility issues
+   - Example: "없음 (로직 변경 없음, async/await만 추가)" or "기존 동기 코드와 호환 불가"
+
+3. **ASK** - "이렇게 수정하겠습니다. 진행할까요?"
+4. **WAIT** - Wait for explicit user confirmation
+5. **PROCEED** - Only after confirmation, use Edit/Write tools
+
+### Scope of "진행해라" (Proceed):
+When user says "진행해라" (proceed), it ONLY approves:
+- What you explicitly explained in step 2
+- Nothing more, nothing less
+
+When user says "진행해라", it DOES NOT mean:
+- [NO] "Do whatever you think is necessary"
+- [NO] "You can make additional changes without asking"
+- [NO] "Skip the protocol for follow-up changes"
+- [YES] It ONLY means: "Proceed with what you just explained"
+
+### Multiple Changes Rule:
+If your work involves multiple files or sections:
+1. List ALL changes upfront in a single explanation
+2. Get ONE confirmation for all changes
+3. Then proceed with all changes
+
+If you discover additional changes are needed AFTER starting:
+1. STOP immediately
+2. Explain the newly discovered changes
+3. Ask "추가 수정이 필요합니다. 진행할까요?"
+4. Wait for confirmation
+5. Then proceed
+
+### Size/Urgency Exception: NONE
+There are NO exceptions based on:
+- [NO] "It's just one line" - Still must explain
+- [NO] "It's urgent" - Still must explain
+- [NO] "It's obvious" - Still must explain
+- [NO] "User already approved similar change" - Still must explain each change
+
+### Pre-Modification Checklist (ASK YOURSELF):
+Before using Edit/Write/NotebookEdit tool, ask yourself:
+1. Did I explain WHAT will be changed?
+2. Did I explain HOW it will be changed?
+3. Did I provide "변경 사항" section with before/after examples?
+4. Did I provide "영향 범위" section listing affected code?
+5. Did I provide "부작용" section with side effects and implications?
+6. Did I explicitly ask "진행할까요?"
+7. Did I receive user confirmation?
+
+If ANY answer is NO, then DO NOT use Edit/Write tools
+
+### Example of Correct Process:
+- WRONG: Immediately uses Edit tool without explanation
+- WRONG: User says "fix the bug" then you immediately fix bug + refactor code + remove logs (without explaining all three)
+- RIGHT:
+  1. "XXX 파일의 YYY 함수에서 ZZZ 오류가 발생했습니다"
+  2. "다음과 같이 수정하겠습니다:
+
+      변경 사항 (Changes):
+      1. AAA 함수: def foo() → async def foo()
+      2. BBB 호출: cursor.execute(query) → await conn.fetch(query)
+      3. CCC import: Add import asyncio
+      4. DDD 로그: Remove debug print statements
+
+      영향 범위 (Impact Scope):
+      - EEE 모듈에서 AAA 함수 호출하는 3개 지점에 await 추가 필요
+      - FFF 테스트 케이스 5개 수정 필요
+      - GGG 파일에서도 동일한 패턴 적용 권장
+
+      부작용 (Side Effects):
+      - 기존 동기 방식 코드와 호환 불가 (breaking change)
+      - 성능 향상 예상 (병렬 처리로 10x faster)
+      - asyncio.run()으로 main 함수 실행 방식 변경 필요"
+
+  3. "이렇게 수정하겠습니다. 진행할까요?" (Wait for user confirmation)
+  4. (After receiving "진행해라") Then use Edit tool
+
+### This Rule Applies To:
+- All code modifications (no matter how small)
+- Typo fixes and one-line changes
+- Emergency bug fixes
+- Configuration file updates
+- Deleting code
+- Adding code
+- Moving code
+- Refactoring
+
+### If You Violate This Rule:
+- User will interrupt and ask you to explain first
+- You must acknowledge the mistake
+- You must follow the correct process before proceeding
+- Repeated violations indicate you are not following the rules
+
+## Strict Requirements
+1. **NO EMOJIS**: Never use emojis in code, comments, SQL queries, or output messages
+2. **Language**: All code comments and variable names in English
+3. **Output messages**: Korean is allowed for user-facing messages, but NO emojis
+4. **SQL**: Write clean, optimized PostgreSQL queries without emojis
+
+## Documentation
+- Document all major functions
+- Update README when adding new features
+- Keep schema reference up to date
+
+## Testing
+- Test database connections before running analysis
+- Validate data before calculations
+- Handle missing data gracefully
+- Log errors for debugging
+
+## US Stock Analysis Protocol
+
+### CRITICAL: Asynchronous Programming (MANDATORY)
+
+All US stock analysis code MUST be written asynchronously from the start.
+
+**Background:**
+- Korean stock system was initially written synchronously, then refactored to async (caused major confusion and rework)
+- US system has more data tables (35 vs 17) and requires better performance
+- Multiple concurrent API calls and database queries are essential
+
+**Requirements:**
+1. Use `asyncio` and `asyncpg` for all database operations
+2. Use `async def` for all functions that involve I/O operations (DB queries, API calls, file I/O)
+3. Use `await` for all async function calls
+4. Use `asyncio.gather()` for parallel operations when possible
+5. Database connection: `asyncpg.connect()` NOT `psycopg2`
+6. Connection string: Use `postgresql://` (remove `+asyncpg` suffix for asyncpg.connect)
+
+**Example Structure:**
+```python
+import asyncio
+import asyncpg
+from typing import Dict, List, Optional
+
+async def fetch_stock_data(conn: asyncpg.Connection, symbol: str) -> Dict:
+    """Fetch stock data asynchronously"""
+    query = "SELECT * FROM us_stock_basic WHERE symbol = $1"
+    row = await conn.fetchrow(query, symbol)
+    return dict(row) if row else None
+
+async def analyze_stock(symbol: str) -> Dict:
+    """Analyze single stock asynchronously"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        data = await fetch_stock_data(conn, symbol)
+        # Process data
+        return process_data(data)
+    finally:
+        await conn.close()
+
+async def analyze_multiple_stocks(symbols: List[str]) -> List[Dict]:
+    """Analyze multiple stocks in parallel"""
+    tasks = [analyze_stock(symbol) for symbol in symbols]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return results
+
+async def main():
+    symbols = ['AAPL', 'MSFT', 'GOOGL']
+    results = await analyze_multiple_stocks(symbols)
+    return results
+
+if __name__ == '__main__':
+    results = asyncio.run(main())
+```
+
+**Connection Pool Pattern (for high-performance):**
+```python
+async def main():
+    # Create connection pool
+    pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=5,
+        max_size=20
+    )
+
+    try:
+        # Use pool for queries
+        async with pool.acquire() as conn:
+            result = await conn.fetch("SELECT ...")
+    finally:
+        await pool.close()
+```
+
+**Parallel Query Pattern:**
+```python
+async def calculate_all_factors(conn: asyncpg.Connection, symbol: str):
+    """Calculate all factors in parallel"""
+    value_task = calculate_value_factor(conn, symbol)
+    quality_task = calculate_quality_factor(conn, symbol)
+    momentum_task = calculate_momentum_factor(conn, symbol)
+    growth_task = calculate_growth_factor(conn, symbol)
+
+    # Execute all in parallel
+    value, quality, momentum, growth = await asyncio.gather(
+        value_task,
+        quality_task,
+        momentum_task,
+        growth_task
+    )
+
+    return {
+        'value': value,
+        'quality': quality,
+        'momentum': momentum,
+        'growth': growth
+    }
+```
+
+**Why This Matters:**
+- Performance: 10-50x faster for bulk operations
+- Scalability: Can analyze hundreds of stocks concurrently
+- Code consistency: Avoid sync-to-async refactoring nightmare
+- Best practice: Modern Python async/await is the standard for I/O-bound operations

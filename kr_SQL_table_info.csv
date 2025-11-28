@@ -1,0 +1,454 @@
+﻿한국 주식 관련 데이터,,
+테이블명,kr_intraday,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+exchange,VARCHAR(20),시장구분
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+volume,BIGINT,거래량
+trading_value,BIGINT,거래대금
+market_cap,"DECIMAL(21,2)",시가총액
+listed_shares,BIGINT,상장주식수
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,kr_intraday_detail,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+eps,"DECIMAL(12,2)",주당순이익
+per,"DECIMAL(12,2)",PER
+bps,"DECIMAL(12,2)",주당순자산
+pbr,"DECIMAL(12,2)",주가순자산비율
+dps,"DECIMAL(12,2)",주당배당금
+dividend_yield,"DECIMAL(6,2)",배당수익률
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,kr_intraday_total,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+exchange,VARCHAR(20),시장구분
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+volume,BIGINT,거래량
+trading_value,BIGINT,거래대금
+market_cap,"DECIMAL(21,2)",시가총액
+listed_shares,BIGINT,상장주식수
+eps,"DECIMAL(12,2)",주당순이익
+per,"DECIMAL(12,2)",PER
+bps,"DECIMAL(12,2)",주당순자산
+pbr,"DECIMAL(12,2)",주가순자산비율
+dps,"DECIMAL(12,2)",주당배당금
+dividend_yield,"DECIMAL(6,2)",배당수익률
+date,DATE,
+,,
+테이블명,kr_indicators,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+date,DATE,생성 날짜
+rsi,"DECIMAL(20,4)",rsi
+macd,"DECIMAL(20,4)",macd
+macd_signal,"DECIMAL(20,4)",macd_signal
+macd_hist,"DECIMAL(20,4)",macd_hist
+real_upper_band,"DECIMAL(20,4)",real_upper_band
+real_middle_band,"DECIMAL(20,4)",real_middle_band
+real_lower_band,"DECIMAL(20,4)",real_lower_band
+vwap,"DECIMAL(20,4)",vwap
+eod_vwap,"DECIMAL(20,4)",eod_vwap
+avg_vwap,"DECIMAL(20,4)",avg_vwap
+price_vs_vwap,"DECIMAL(20,4)",price_vs_vwap
+atr,"DECIMAL(20,4)",atr
+slowk,"DECIMAL(20,4)",slowk
+slowd,"DECIMAL(20,4)",slowd
+mfi,"DECIMAL(20,4)",mfi
+roc,"DECIMAL(20,4)",roc
+sma,"DECIMAL(20,4)",sma
+ema,"DECIMAL(20,4)",ema
+adx,"DECIMAL(20,4)",adx
+wma,"DECIMAL(20,4)",wma
+aroon,"DECIMAL(20,4)",aroon
+cci,"DECIMAL(20,4)",cci
+obv,"DECIMAL(20,4)",obv
+created_at,TIMESTAMP,
+,,
+테이블명,kr_investor_daily_trading,
+컬럼명,데이터 타입,설명
+investor_type,VARCHAR(100),투자자구분
+sell_volume,BIGINT,매도량
+buy_volume,BIGINT,매수량
+net_buy_volume,BIGINT,순매수량
+sell_value,BIGINT,매도대금
+buy_value,BIGINT,매수대금
+net_buy_value,BIGINT,순매수대금
+date,DATE,
+,,
+테이블명,kr_program_daily_trading,
+컬럼명,데이터 타입,설명
+category,VARCHAR(100),거래 구분
+sell_volume,BIGINT,매도량
+buy_volume,BIGINT,매수량
+net_buy_volume,BIGINT,순매수량
+sell_value,BIGINT,매도대금
+buy_value,BIGINT,매수대금
+net_buy_value,BIGINT,순매수대금
+date,DATE,
+,,
+테이블명,kr_blocktrades,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+volume,BIGINT,거래량
+block_volume,BIGINT,대량매매수량
+block_volume_rate,"DECIMAL(6,2)",대량매매비율
+date,DATE,
+,,
+테이블명,kr_foreign_ownership,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+listed_shares,BIGINT,상장주식수
+foreign_ownership,BIGINT,외국인보유수량
+foreign_rate,"DECIMAL(6,2)",외국인지분율
+foreign_limit,BIGINT,외국인 한도수량
+foreign_rate_limit,"DECIMAL(6,2)",외국인 한도소진율
+date,DATE,
+,,
+테이블명,kr_stock_basic,
+컬럼명,데이터 타입,설명
+standard_symbol,VARCHAR(20),표준 코드
+symbol,VARCHAR(10),종목코드
+standard_stock_name,VARCHAR(200),표준종목명
+stock_name,VARCHAR(200),종목명
+stock_name_eng,VARCHAR(200),영문종목명
+listed_date,DATE,상장일
+exchange,VARCHAR(20),시장구분
+securities_type,VARCHAR(200),증권구분
+department,VARCHAR(200),소속부
+stock_type,VARCHAR(200),주식종류
+par_value,BIGINT,액면가
+listed_shares,BIGINT,상장주식수
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,kr_stock_detail,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+stock_name,VARCHAR(200),종목명
+exchange,VARCHAR(20),시장구분
+department,VARCHAR(200),소속부
+industry_code,VARCHAR(20),업종코드
+industry,VARCHAR(100),산업
+fiscal_month,DECIMAL(2),결산 월
+advisor,VARCHAR(200),지정자문인
+listed_shares,BIGINT,상장주식수
+par_value,BIGINT,액면가
+capital,BIGINT,자본금
+currency,VARCHAR(3),통화 기호
+ceo_name,VARCHAR(100),대표이사 이름
+phone,VARCHAR(100),회사 전화번호
+address,VARCHAR(255),회사 주소
+theme,VARCHAR(255),테마 분류
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,kr_individual_investor_daily_trading,
+컬럼명,데이터 타입,설명
+date,DATE,일자
+symbol,VARCHAR(10),종목코드
+inst_buy_volume,BIGINT,기관매수수량
+inst_sell_volume,BIGINT,기관매도수량
+inst_net_volume,BIGINT,기관순매수수량
+inst_buy_value,BIGINT,기관매수금액
+inst_sell_value,BIGINT,기관매도금액
+inst_net_value,BIGINT,기관순매수금액
+inst_buy_ratio,"DECIMAL(6,2)",기관매수비중(%)
+retail_buy_volume,BIGINT,개인매수수량
+retail_sell_volume,BIGINT,개인매도수량
+retail_net_volume,BIGINT,개인순매수수량
+retail_buy_value,BIGINT,개인매수금액
+retail_sell_value,BIGINT,개인매도금액
+retail_net_value,BIGINT,개인순매수금액
+retail_buy_ratio,"DECIMAL(6,2)",개인매수비중(%)
+foreign_buy_volume,BIGINT,외국인매수수량
+foreign_sell_volume,BIGINT,외국인매도수량
+foreign_net_volume,BIGINT,외국인순매수수량
+foreign_buy_value,BIGINT,외국인매수금액
+foreign_sell_value,BIGINT,외국인매도금액
+foreign_net_value,BIGINT,외국인순매수금액
+foreign_buy_ratio,"DECIMAL(6,2)",외국인매수비중(%)
+total_buy_volume,BIGINT,전체매수수량
+total_sell_volume,BIGINT,전체매도수량
+total_net_volume,BIGINT,전체순매수수량
+total_buy_value,BIGINT,전체거래대금
+total_sell_value,BIGINT,전체매도금액
+total_net_value,BIGINT,전체순매수금액
+,,
+테이블명,kr_financial_position,
+컬럼명,데이터 타입,설명
+stock_name,VARCHAR(200),종목명
+symbol,VARCHAR(20),종목 코드
+report_code,VARCHAR(20),보고서 코드
+bsns_year,INT,사업 연도
+corp_code,VARCHAR(8),공시대상 고유번호
+fs_div,VARCHAR(8),"개별/연결구분 OFS:재무제표, CFS:연결재무제표"
+sj_div,VARCHAR(50),"재무제표 구분 (예: BS, IS, CF)"
+sj_nm,VARCHAR(100),재무제표명
+account_id,VARCHAR(100),계정 ID
+account_nm,VARCHAR(100),계정명
+account_detail,TEXT,계정 상세
+thstrm_nm,VARCHAR(50),당기명
+thstrm_amount,BIGINT,당기금액
+thstrm_add_amount,BIGINT,당기 누적 금액
+frmtrm_nm,VARCHAR(50),전기명
+frmtrm_amount,BIGINT,전기금액
+frmtrm_q_nm,VARCHAR(50),전기명(분/반기)
+frmtrm_q_amount,BIGINT,전기금액(분/반기)
+frmtrm_add_amount,BIGINT,전기누적금액
+bfefrmtrm_nm,VARCHAR(50),전전기명
+bfefrmtrm_amount,BIGINT,전전기금액
+ord,INT,계정과목 정렬순서
+currency,VARCHAR(20),통화 단위
+rcept_no,VARCHAR(20),접수번호
+fs_nm,VARCHAR(50),재무제표명
+thstrm_dt,VARCHAR(50),기준일자
+frmtrm_dt,VARCHAR(50),기준일자
+rcept_dt,DATE,공시일자
+,,
+테이블명,kr_audit,회계감사인의 명칭 및 감사의견
+컬럼명,데이터 타입,설명
+stock_name,VARCHAR(200),종목명
+symbol,VARCHAR(20),종목 코드
+rcept_no,VARCHAR(50),접수번호
+corp_cls,VARCHAR(100),"법인구분 : Y(유가), K(코스닥), N(코넥스), E(기타)"
+corp_code,VARCHAR(100),고유번호
+corp_name,VARCHAR(100),법인명
+bsns_year,VARCHAR(100),"사업연도(당기, 전기, 전전기)"
+adtor,VARCHAR(50),감사인
+adt_opinion,TEXT,감사의견
+adt_reprt_spcmnt_matter,TEXT,감사보고서 특기사항
+emphs_matter,TEXT,강조사항 등
+core_adt_matter,TEXT,핵심감사사항
+stlm_dt,DATE,결산기준일
+,,
+테이블명,kr_dividends,배당 관련 정보
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(20),종목 코드
+rcept_no,VARCHAR(50),접수번호
+corp_cls,VARCHAR(100),"법인구분 : Y(유가), K(코스닥), N(코넥스), E(기타)"
+corp_code,VARCHAR(100),고유번호
+corp_name,VARCHAR(100),법인명
+se,VARCHAR(100),"유상증자(주주배정), 전환권행사 등"
+stock_knd,VARCHAR(50),주식 종류 (보통주 등)
+thstrm,"DECIMAL(18, 2)",당기
+frmtrm,"DECIMAL(18, 2)",전기
+lwfr,"DECIMAL(18, 2)",전전기
+stlm_dt,DATE,결산기준일
+,,
+테이블명,kr_largest_shareholder,최대주주 정보
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(20),종목 코드
+rcept_no,VARCHAR(50),접수번호
+corp_cls,VARCHAR(50),"법인구분 : Y(유가), K(코스닥), N(코넥스), E(기타)"
+corp_code,VARCHAR(50),고유번호
+corp_name,VARCHAR(50),법인명
+nm,VARCHAR(100),성명
+relate,VARCHAR(50),"관계 (본인, 친인척 등)"
+stock_knd,VARCHAR(50),주식 종류 (보통주 등)
+bsis_posesn_stock_co,BIGINT,기초 소유 주식 수
+bsis_posesn_stock_qota_rt,"DECIMAL(5,2)",기초 소유 주식 지분 율
+trmend_posesn_stock_co,BIGINT,기말 소유 주식 수
+trmend_posesn_stock_qota_rt,"DECIMAL(5,2)",기말 소유 주식 지분 율
+rm,TEXT,비고
+stlm_dt,DATE,결산기준일
+,,
+테이블명,kr_stockacquisitiondisposal,자기주식 취득 처분 현황
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(20),종목 코드
+rcept_no,VARCHAR(50),접수번호
+corp_cls,VARCHAR(50),"법인구분 : Y(유가), K(코스닥), N(코넥스), E(기타)"
+corp_code,VARCHAR(50),고유번호
+corp_name,VARCHAR(50),법인명
+acqs_mth1,VARCHAR(100),취득 방법 대분류
+acqs_mth2,VARCHAR(100),취득 방법 중분류
+acqs_mth3,VARCHAR(100),취득 방법 소분류
+stock_knd,VARCHAR(50),주식 종류 (보통주 등)
+bsis_qy,BIGINT,기초 수량
+change_qy_acqs,BIGINT,변동 수량 취득
+change_qy_dsps,BIGINT,변동 수량 처분
+change_qy_incnr,BIGINT,변동 수량 소각
+trmend_qy,BIGINT,기말 수량
+rm,TEXT,비고
+stlm_dt,DATE,결산기준일
+,,
+테이블명,kr_executive,임원 현황 dart
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(20),종목 코드
+rcept_no,VARCHAR(50),접수번호
+corp_cls,VARCHAR(50),"법인구분 : Y(유가), K(코스닥), N(코넥스), E(기타)"
+corp_code,VARCHAR(50),고유번호
+corp_name,VARCHAR(50),법인명
+nm,VARCHAR(100),성명
+sexdstn,VARCHAR(255),성별
+birth_ym,VARCHAR(255),출생 년월
+ofcps,VARCHAR(255),직위
+rgist_exctv_at,VARCHAR(255),등기 임원 여부
+fte_at,VARCHAR(255),상근 여부
+chrg_job,VARCHAR(255),담당 업무
+main_career,VARCHAR(255),주요 경력
+mxmm_shrholdr_relate,VARCHAR(255),최대 주주 관계
+hffc_pd,VARCHAR(255),재직 기간
+tenure_end_on,VARCHAR(255),임기 만료 일
+stlm_dt,DATE,결산기준일
+,,
+공통 사항,,
+테이블명,market_index,
+컬럼명,데이터 타입,설명
+exchange,VARCHAR(20),"증권거래소 - 예시 KOSPI, KOSDAQ, NASDAQ, NYSE"
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+volume,BIGINT,거래량
+trading_value,BIGINT,거래대금
+date,DATE,날짜
+,,
+,,
+테이블명,bok_economic_indicators,
+컬럼명,데이터 타입,설명
+stat_code,VARCHAR(20),
+stat_name,VARCHAR(200),"한국은행 기준금리, 국내총생산(실질성장률), 생산자물가지수, 소비자물가지수, 수출물가지수, 수입물가지수, 경제심리지수, 뉴스심리지수"
+item_code1,VARCHAR(20),
+item_name1,VARCHAR(100),
+item_code2,VARCHAR(20),
+item_name2,VARCHAR(100),
+item_code3,VARCHAR(20),
+item_name3,VARCHAR(100),
+item_code4,VARCHAR(20),
+item_name4,VARCHAR(100),
+unit_name,VARCHAR(50),
+wgt,"DECIMAL(10, 2)",
+cycle,"CHAR(1) CHECK (cycle IN ('A', 'Q', 'M', 'D')",
+time_value,DATE,
+time_original,VARCHAR(10),
+data_value,"DECIMAL(15, 4)",
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+,,
+테이블명,kr_stock_grade,
+컬럼명,데이터 타입,설명
+stock_name,VARCHAR(200),종목명
+symbol,VARCHAR(10),종목 코드
+date,DATE,실행 날짜
+final_grade,VARCHAR(20),"투자 등급 (강력 매수, 매수, 매수 고려, 중립, 매도 고려, 매도, 강력 매도, 평가 불가)"
+final_score,"DECIMAL(5,1)",최종 점수 (0-100)
+value_score,"DECIMAL(5,1)",가치 팩터 점수 (0-100)
+quality_score,"DECIMAL(5,1)",품질 팩터 점수 (0-100)
+momentum_score,"DECIMAL(5,1)",모멘텀 팩터 점수 (0-100)
+growth_score,"DECIMAL(5,1)",성장 팩터 점수 (0-100)
+confidence_score,"DECIMAL(5,1)",신뢰도 점수 (%)
+expected_range_3m_min,INTEGER,향후 3개월 예상 가격 하한 (원)
+expected_range_3m_max,INTEGER,향후 3개월 예상 가격 상한 (원)
+expected_range_1y_min,INTEGER,향후 1년 예상 가격 하한 (원)
+expected_range_1y_max,INTEGER,향후 1년 예상 가격 상한 (원)
+var_95,"DECIMAL(6,2)","일일 VaR 95% (음수, %)"
+cvar_95,"DECIMAL(6,2)","일일 CVaR 95% (음수, %)"
+inst_net_30d,BIGINT,기관 30일 순매수 금액 (원)
+foreign_net_30d,BIGINT,외국인 30일 순매수 금액 (원)
+value_momentum,"DECIMAL(5,1)",가치 팩터 모멘텀 (전월 대비 변화)
+quality_momentum,"DECIMAL(5,1)",품질 팩터 모멘텀 (전월 대비 변화)
+momentum_momentum,"DECIMAL(5,1)",모멘텀 팩터 모멘텀 (전월 대비 변화)
+growth_momentum,"DECIMAL(5,1)",성장 팩터 모멘텀 (전월 대비 변화)
+industry_rank,INTEGER,업종 내 순위
+industry_percentile,"DECIMAL(5,1)",업종 내 백분위수 (상위 X%)
+beta,"DECIMAL(6,2)",베타 계수 (시장 대비 민감도)
+volatility_annual,"DECIMAL(7,2)",연환산 변동성 (%)
+max_drawdown_1y,"DECIMAL(6,2)","1년 최대낙폭 (음수, %)"
+risk_profile_text,TEXT,리스크 프로파일 해석
+risk_recommendation,TEXT,투자자 적합성 추천
+time_series_text,TEXT,시계열 추세 해석
+signal_overall,TEXT,종합 평가 해석
+buy_signals_count,INTEGER,매수 신호 개수
+neutral_signals_count,INTEGER,중립 신호 개수
+sell_signals_count,INTEGER,매도 신호 개수
+market_state,VARCHAR(100),시장 상태 분류 (시장-유동성-섹터-변동성 등 19개 차원)
+buy_signal_1,TEXT,매수 신호 내용 1
+buy_signal_2,TEXT,매수 신호 내용 2
+buy_signal_3,TEXT,매수 신호 내용 3
+neutral_signal_1,TEXT,중립 신호 내용 1
+neutral_signal_2,TEXT,중립 신호 내용 2
+neutral_signal_3,TEXT,중립 신호 내용 3
+sell_signal_1,TEXT,매도 신호 내용 1
+sell_signal_2,TEXT,매도 신호 내용 2
+sell_signal_3,TEXT,매도 신호 내용 3
+support_1,"DECIMAL(21,2)",지지선 1 (원)
+support_2,"DECIMAL(21,2)",지지선 2 (원)
+resistance_1,"DECIMAL(21,2)",저항선 1 (원)
+resistance_2,"DECIMAL(21,2)",저항선 2 (원)
+supertrend_value,"DECIMAL(21,2)",SuperTrend 기준 가격 (원)
+trend,TEXT,SuperTrend 추세 방향 (상승/하락/중립)
+signal,TEXT,SuperTrend 매매 신호 (매수/매도/보유)
+rs_value,"DECIMAL(21,2)","상대강도(RS) 값: 종목 수익률 - 시장 수익률 (%, 20일)"
+rs_rank,TEXT,상대강도 등급 (매우강함/강함/중립/약함/매우약함)
+factor_combination_bonus,INTEGER,팩터 조합 보너스: 검증된 승리 패턴 (+30~-20)
+sector_rotation_score,INTEGER,섹터 로테이션 점수 (0-100): 업종 모멘텀 및 상대 강도
+sector_momentum,"DECIMAL(5,2)","섹터 모멘텀 (%, 최근 30일 수익률)"
+sector_rank,INTEGER,섹터 순위 (전체 섹터 중)
+sector_percentile,"DECIMAL(5,2)",섹터 백분위수 (상위 X%)
+value_v2_detail,JSONB,
+quality_v2_detail,JSONB,
+momentum_v2_detail,JSONB,
+growth_v2_detail,JSONB,
+created_at,TIMESTAMP,
+,,
+테이블명,kr_research_reports,
+컬럼명,데이터 타입,설명
+report_id,INTEGER,PRIMARY KEY
+stock_name,VARCHAR(200),회사명
+symbol,VARCHAR(20),종목 코드
+title,TEXT,제목
+securities_firm,VARCHAR(100),증권사
+date,DATE,발행날짜
+target_price,"DECIMAL(10,2)",목표가
+investment_opinion,VARCHAR(50),투자의견
+summary,TEXT,레포트 요약
+pdf_url,TEXT,레포트 파일 url
+created_at,TIMESTAMP,
+,,
+테이블명,exchange_rate,
+컬럼명,데이터 타입,설명
+stat_code,VARCHAR(20),
+stat_name,VARCHAR(200),환율
+item_code1,VARCHAR(20),
+item_name1,VARCHAR(100),
+unit_name,VARCHAR(50),
+cycle,"CHAR(1) CHECK (cycle IN ('A', 'Q', 'M', 'D')",
+time_value,DATE,
+time_original,VARCHAR(10),
+data_value,"DECIMAL(15, 4)",
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+"UNIQUE(stat_code, time_value, item_code1)","UNIQUE(stat_code, time_value, item_code1, item_code2, item_code3, item_code4)",

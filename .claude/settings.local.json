@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\":*)",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\" -c \"import csv; data = list(csv.DictReader(open(r''C:\\project\\alpha\\quant\\kr_financial_position.csv'', encoding=''utf-8''))); symbol_000020 = [row for row in data if row[''symbol''] == ''000020'' and row[''bsns_year''] == ''2025'' and row[''sj_div''] in [''BS'', ''CIS'']]; print(f''000020 (2025) record count: {len(symbol_000020)}''); [print(f''{row[\"\"sj_div\"\"]:3} | {row[\"\"account_nm\"\"]}'') for row in symbol_000020[:20]]\")",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\" check_2020_data.py)",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\" export_accounts_to_file.py)",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\" search_key_totals.py)",
+      "Bash(\"C:\\project\\alpha\\quant\\venv\\Scripts\\python.exe\" check_all_years_totals.py)",
+      "Bash(C:projectalphaquantvenvScriptspython.exe check_themes.py)",
+      "Bash(if not exist \"C:\\project\\alpha\\quant\\kr\" mkdir \"C:\\project\\alpha\\quant\\kr\")",
+      "Bash(python -c:*)",
+      "Bash(python -m py_compile:*)"
+    ],
+    "deny": [],
+    "ask": [
+      "Edit",
+      "Write",
+      "NotebookEdit"
+    ]
+  }
+}

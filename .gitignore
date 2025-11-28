@@ -1,0 +1,37 @@
+# 제외 폴더
+kr/result test/
+kr/analysis/
+kr/sql/
+us/result/
+us/analysis/
+us/sql/
+us/ver_1/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+nul

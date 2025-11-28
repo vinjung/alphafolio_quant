@@ -1,0 +1,798 @@
+{
+  "queries": [
+    {
+      "name": "Phase 1-1: Fed Rate Trend",
+      "execution_time": 0.153,
+      "row_count": 1,
+      "memory_start_mb": 63.73,
+      "memory_end_mb": 63.76,
+      "memory_delta_mb": 0.03,
+      "timestamp": "2025-11-23T01:26:22.493674",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_fed_funds_rate ORDER BY date DESC LIMIT 1) as current_rate,\n            (SELECT value FROM us_fed_funds_rate\n             WHERE date <= CURRENT_DATE -..."
+    },
+    {
+      "name": "Phase 1-2: CPI Trend",
+      "execution_time": 0.152,
+      "row_count": 1,
+      "memory_start_mb": 63.77,
+      "memory_end_mb": 63.77,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:26:22.721297",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_cpi ORDER BY date DESC LIMIT 1) as current_cpi,\n            (SELECT value FROM us_cpi\n             WHERE date <= CURRENT_DATE - INTERVAL '1 year'\n    ..."
+    },
+    {
+      "name": "Phase 1-3: Unemployment Trend",
+      "execution_time": 0.151,
+      "row_count": 1,
+      "memory_start_mb": 63.77,
+      "memory_end_mb": 63.77,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:26:22.947586",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_unemployment_rate ORDER BY date DESC LIMIT 1) as current_unemployment,\n            (SELECT value FROM us_unemployment_rate\n             WHERE date <= ..."
+    },
+    {
+      "name": "Phase 1-4: Get Latest Date",
+      "execution_time": 0.152,
+      "row_count": 1,
+      "memory_start_mb": 63.77,
+      "memory_end_mb": 63.77,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:26:23.175077",
+      "query_preview": "\n        SELECT MAX(date) as latest_date\n        FROM us_daily\n        "
+    },
+    {
+      "name": "Phase 1-5: Check MV",
+      "execution_time": 0.156,
+      "row_count": 1,
+      "memory_start_mb": 63.77,
+      "memory_end_mb": 63.78,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:26:23.405659",
+      "query_preview": "\n        SELECT COUNT(*) as cnt\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        "
+    },
+    {
+      "name": "Phase 1-6: Sector Performance",
+      "execution_time": 0.153,
+      "row_count": 14,
+      "memory_start_mb": 63.79,
+      "memory_end_mb": 63.79,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-23T01:26:23.633005",
+      "query_preview": "\n        SELECT\n            sector_code,\n            avg_return_30d,\n            stock_count,\n            sector_rank\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        ORDER ..."
+    },
+    {
+      "name": "Phase 1-7: Market Sentiment",
+      "execution_time": 0.152,
+      "row_count": 0,
+      "memory_start_mb": 63.8,
+      "memory_end_mb": 63.8,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:26:23.860370",
+      "query_preview": "\n            WITH sp500_data AS (\n                SELECT\n                    date,\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                ..."
+    },
+    {
+      "name": "Query 1: Basic Info",
+      "execution_time": 0.703,
+      "row_count": 4540,
+      "memory_start_mb": 63.8,
+      "memory_end_mb": 69.46,
+      "memory_delta_mb": 5.66,
+      "timestamp": "2025-11-23T01:26:24.638858",
+      "query_preview": "\n        SELECT\n            symbol,\n            exchange,\n            market_cap,\n            sector,\n            industry,\n            quarterlyrevenuegrowthyoy,\n            quarterlyearningsgrowthyo..."
+    },
+    {
+      "name": "Query 2: Combined Market Data (Price + Volume + Volatility)",
+      "execution_time": 2.623,
+      "row_count": 4712,
+      "memory_start_mb": 71.25,
+      "memory_end_mb": 74.76,
+      "memory_delta_mb": 3.51,
+      "timestamp": "2025-11-23T01:26:27.350159",
+      "query_preview": "\n        WITH latest_data AS (\n            SELECT DISTINCT ON (symbol)\n                symbol,\n                close,\n                volume,\n                date\n            FROM us_daily\n           ..."
+    },
+    {
+      "name": "Query 3: Technical Indicators",
+      "execution_time": 80.337,
+      "row_count": 2272425,
+      "memory_start_mb": 75.91,
+      "memory_end_mb": 1892.46,
+      "memory_delta_mb": 1816.55,
+      "timestamp": "2025-11-23T01:27:47.773922",
+      "query_preview": "\n        WITH atr_data AS (\n            SELECT\n                symbol,\n                atr,\n                close,\n                date,\n                ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY..."
+    },
+    {
+      "name": "Query 4-0: MAX date",
+      "execution_time": 365.007,
+      "row_count": 1,
+      "memory_start_mb": 1875.11,
+      "memory_end_mb": 1875.16,
+      "memory_delta_mb": 0.05,
+      "timestamp": "2025-11-23T01:33:58.094867",
+      "query_preview": "SELECT MAX(date) FROM us_option"
+    },
+    {
+      "name": "Query 4a: P/C Ratio",
+      "execution_time": 12.403,
+      "row_count": 667,
+      "memory_start_mb": 1875.16,
+      "memory_end_mb": 1875.23,
+      "memory_delta_mb": 0.07,
+      "timestamp": "2025-11-23T01:34:10.577092",
+      "query_preview": "\n            SELECT\n                symbol,\n                SUM(CASE WHEN type = 'call' THEN volume ELSE 0 END) as call_volume,\n                SUM(CASE WHEN type = 'put' THEN volume ELSE 0 END) as pu..."
+    },
+    {
+      "name": "Query 4b: Current IV",
+      "execution_time": 0.286,
+      "row_count": 485,
+      "memory_start_mb": 1875.23,
+      "memory_end_mb": 1875.23,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:34:10.941276",
+      "query_preview": "\n            SELECT\n                symbol,\n                AVG(implied_volatility) as current_iv\n            FROM us_option\n            WHERE date = $1\n              AND symbol = ANY($2::text[])\n    ..."
+    },
+    {
+      "name": "Query 4c: IV Range",
+      "execution_time": 18.515,
+      "row_count": 2798,
+      "memory_start_mb": 1875.23,
+      "memory_end_mb": 1875.28,
+      "memory_delta_mb": 0.05,
+      "timestamp": "2025-11-23T01:34:29.533515",
+      "query_preview": "\n            SELECT\n                symbol,\n                MIN(implied_volatility) as iv_min,\n                MAX(implied_volatility) as iv_max\n            FROM us_option\n            WHERE date >= ($..."
+    },
+    {
+      "name": "Query 5: Analyst",
+      "execution_time": 1.253,
+      "row_count": 3422,
+      "memory_start_mb": 1875.28,
+      "memory_end_mb": 1875.29,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-23T01:34:30.869376",
+      "query_preview": "\n        WITH latest_estimates AS (\n            SELECT\n                symbol,\n                eps_estimate_revision_up_trailing_30_days / 10000.0 as revision_up_30d,\n                eps_estimate_revi..."
+    },
+    {
+      "name": "Query 6: News Sentiment",
+      "execution_time": 2.546,
+      "row_count": 3426,
+      "memory_start_mb": 1875.29,
+      "memory_end_mb": 1875.29,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T01:34:33.501763",
+      "query_preview": "\n        SELECT\n            ticker as symbol,\n            COUNT(*) as news_count,\n            AVG(overall_sentiment_score) as avg_sentiment\n        FROM us_news\n        WHERE time_published >= NOW() -..."
+    },
+    {
+      "name": "Phase 1-1: Fed Rate Trend",
+      "execution_time": 1.336,
+      "row_count": 1,
+      "memory_start_mb": 98.73,
+      "memory_end_mb": 100.27,
+      "memory_delta_mb": 1.55,
+      "timestamp": "2025-11-23T02:09:50.150505",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_fed_funds_rate ORDER BY date DESC LIMIT 1) as current_rate,\n            (SELECT value FROM us_fed_funds_rate\n             WHERE date <= CURRENT_DATE -..."
+    },
+    {
+      "name": "Phase 1-2: CPI Trend",
+      "execution_time": 0.182,
+      "row_count": 1,
+      "memory_start_mb": 100.28,
+      "memory_end_mb": 100.29,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-23T02:09:50.425966",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_cpi ORDER BY date DESC LIMIT 1) as current_cpi,\n            (SELECT value FROM us_cpi\n             WHERE date <= CURRENT_DATE - INTERVAL '1 year'\n    ..."
+    },
+    {
+      "name": "Phase 1-3: Unemployment Trend",
+      "execution_time": 0.179,
+      "row_count": 1,
+      "memory_start_mb": 100.29,
+      "memory_end_mb": 100.29,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:09:50.693074",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_unemployment_rate ORDER BY date DESC LIMIT 1) as current_unemployment,\n            (SELECT value FROM us_unemployment_rate\n             WHERE date <= ..."
+    },
+    {
+      "name": "Phase 1-4: Get Latest Date",
+      "execution_time": 0.181,
+      "row_count": 1,
+      "memory_start_mb": 100.29,
+      "memory_end_mb": 100.29,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:09:50.961045",
+      "query_preview": "\n        SELECT MAX(date) as latest_date\n        FROM us_daily\n        "
+    },
+    {
+      "name": "Phase 1-5: Check MV",
+      "execution_time": 0.18,
+      "row_count": 1,
+      "memory_start_mb": 100.29,
+      "memory_end_mb": 100.29,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:09:51.228601",
+      "query_preview": "\n        SELECT COUNT(*) as cnt\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        "
+    },
+    {
+      "name": "Phase 1-6: Sector Performance",
+      "execution_time": 0.177,
+      "row_count": 14,
+      "memory_start_mb": 100.29,
+      "memory_end_mb": 100.29,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:09:51.494720",
+      "query_preview": "\n        SELECT\n            sector_code,\n            avg_return_30d,\n            stock_count,\n            sector_rank\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        ORDER ..."
+    },
+    {
+      "name": "Phase 1-7: Market Sentiment",
+      "execution_time": 0.177,
+      "row_count": 0,
+      "memory_start_mb": 100.29,
+      "memory_end_mb": 100.3,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-23T02:09:51.760149",
+      "query_preview": "\n            WITH sp500_data AS (\n                SELECT\n                    date,\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                ..."
+    },
+    {
+      "name": "Query 1: Basic Info",
+      "execution_time": 7.199,
+      "row_count": 4583,
+      "memory_start_mb": 100.32,
+      "memory_end_mb": 105.01,
+      "memory_delta_mb": 4.7,
+      "timestamp": "2025-11-23T02:09:59.050271",
+      "query_preview": "\n        SELECT\n            symbol,\n            exchange,\n            market_cap,\n            sector,\n            industry,\n            quarterlyrevenuegrowthyoy,\n            quarterlyearningsgrowthyo..."
+    },
+    {
+      "name": "Query 2: Combined Market Data (Price + Volume + Volatility)",
+      "execution_time": 4.97,
+      "row_count": 4760,
+      "memory_start_mb": 106.89,
+      "memory_end_mb": 110.26,
+      "memory_delta_mb": 3.37,
+      "timestamp": "2025-11-23T02:10:04.167195",
+      "query_preview": "\n        WITH latest_data AS (\n            SELECT DISTINCT ON (symbol)\n                symbol,\n                close,\n                volume,\n                date\n            FROM us_daily\n           ..."
+    },
+    {
+      "name": "Query 3: Technical Indicators",
+      "execution_time": 309.248,
+      "row_count": 2275020,
+      "memory_start_mb": 111.42,
+      "memory_end_mb": 1904.29,
+      "memory_delta_mb": 1792.87,
+      "timestamp": "2025-11-23T02:15:13.524800",
+      "query_preview": "\n        WITH atr_data AS (\n            SELECT\n                symbol,\n                atr,\n                close,\n                date,\n                ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY..."
+    },
+    {
+      "name": "Query 4-0: MAX date",
+      "execution_time": 400.73,
+      "row_count": 1,
+      "memory_start_mb": 1886.93,
+      "memory_end_mb": 1886.56,
+      "memory_delta_mb": -0.38,
+      "timestamp": "2025-11-23T02:22:00.379364",
+      "query_preview": "SELECT MAX(date) FROM us_option"
+    },
+    {
+      "name": "Query 4a: P/C Ratio",
+      "execution_time": 12.273,
+      "row_count": 669,
+      "memory_start_mb": 1886.56,
+      "memory_end_mb": 1886.61,
+      "memory_delta_mb": 0.05,
+      "timestamp": "2025-11-23T02:22:12.739841",
+      "query_preview": "\n            SELECT\n                symbol,\n                SUM(CASE WHEN type = 'call' THEN volume ELSE 0 END) as call_volume,\n                SUM(CASE WHEN type = 'put' THEN volume ELSE 0 END) as pu..."
+    },
+    {
+      "name": "Query 4b: Current IV",
+      "execution_time": 0.33,
+      "row_count": 486,
+      "memory_start_mb": 1886.61,
+      "memory_end_mb": 1886.65,
+      "memory_delta_mb": 0.04,
+      "timestamp": "2025-11-23T02:22:13.157611",
+      "query_preview": "\n            SELECT\n                symbol,\n                AVG(implied_volatility) as current_iv\n            FROM us_option\n            WHERE date = $1\n              AND symbol = ANY($2::text[])\n    ..."
+    },
+    {
+      "name": "Query 4c: IV Range",
+      "execution_time": 18.08,
+      "row_count": 2804,
+      "memory_start_mb": 1886.65,
+      "memory_end_mb": 1886.75,
+      "memory_delta_mb": 0.11,
+      "timestamp": "2025-11-23T02:22:31.326714",
+      "query_preview": "\n            SELECT\n                symbol,\n                MIN(implied_volatility) as iv_min,\n                MAX(implied_volatility) as iv_max\n            FROM us_option\n            WHERE date >= ($..."
+    },
+    {
+      "name": "Query 5: Analyst",
+      "execution_time": 1.325,
+      "row_count": 3426,
+      "memory_start_mb": 1886.76,
+      "memory_end_mb": 1886.93,
+      "memory_delta_mb": 0.17,
+      "timestamp": "2025-11-23T02:22:32.741791",
+      "query_preview": "\n        WITH latest_estimates AS (\n            SELECT\n                symbol,\n                eps_estimate_revision_up_trailing_30_days / 10000.0 as revision_up_30d,\n                eps_estimate_revi..."
+    },
+    {
+      "name": "Query 6: News Sentiment",
+      "execution_time": 2.604,
+      "row_count": 3442,
+      "memory_start_mb": 1886.93,
+      "memory_end_mb": 1886.93,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:22:35.438522",
+      "query_preview": "\n        SELECT\n            ticker as symbol,\n            COUNT(*) as news_count,\n            AVG(overall_sentiment_score) as avg_sentiment\n        FROM us_news\n        WHERE time_published >= NOW() -..."
+    },
+    {
+      "name": "Phase 1-1: Fed Rate Trend",
+      "execution_time": 0.608,
+      "row_count": 1,
+      "memory_start_mb": 120.55,
+      "memory_end_mb": 120.55,
+      "memory_delta_mb": 0.01,
+      "timestamp": "2025-11-23T02:51:32.752678",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_fed_funds_rate ORDER BY date DESC LIMIT 1) as current_rate,\n            (SELECT value FROM us_fed_funds_rate\n             WHERE date <= CURRENT_DATE -..."
+    },
+    {
+      "name": "Phase 1-2: CPI Trend",
+      "execution_time": 0.192,
+      "row_count": 1,
+      "memory_start_mb": 120.55,
+      "memory_end_mb": 120.55,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:33.029322",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_cpi ORDER BY date DESC LIMIT 1) as current_cpi,\n            (SELECT value FROM us_cpi\n             WHERE date <= CURRENT_DATE - INTERVAL '1 year'\n    ..."
+    },
+    {
+      "name": "Phase 1-3: Unemployment Trend",
+      "execution_time": 0.175,
+      "row_count": 1,
+      "memory_start_mb": 120.55,
+      "memory_end_mb": 120.55,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:33.290406",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_unemployment_rate ORDER BY date DESC LIMIT 1) as current_unemployment,\n            (SELECT value FROM us_unemployment_rate\n             WHERE date <= ..."
+    },
+    {
+      "name": "Phase 1-4: Get Latest Date",
+      "execution_time": 0.174,
+      "row_count": 1,
+      "memory_start_mb": 120.55,
+      "memory_end_mb": 120.55,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:33.552519",
+      "query_preview": "\n        SELECT MAX(date) as latest_date\n        FROM us_daily\n        "
+    },
+    {
+      "name": "Phase 1-5: Check MV",
+      "execution_time": 0.174,
+      "row_count": 1,
+      "memory_start_mb": 120.55,
+      "memory_end_mb": 120.55,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:33.812519",
+      "query_preview": "\n        SELECT COUNT(*) as cnt\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        "
+    },
+    {
+      "name": "Phase 1-6: Sector Performance",
+      "execution_time": 0.175,
+      "row_count": 14,
+      "memory_start_mb": 120.56,
+      "memory_end_mb": 120.56,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:34.078481",
+      "query_preview": "\n        SELECT\n            sector_code,\n            avg_return_30d,\n            stock_count,\n            sector_rank\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        ORDER ..."
+    },
+    {
+      "name": "Phase 1-7: Market Sentiment",
+      "execution_time": 0.173,
+      "row_count": 0,
+      "memory_start_mb": 120.56,
+      "memory_end_mb": 120.56,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:51:34.336599",
+      "query_preview": "\n            WITH sp500_data AS (\n                SELECT\n                    date,\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                ..."
+    },
+    {
+      "name": "Query 1: Basic Info",
+      "execution_time": 0.73,
+      "row_count": 4599,
+      "memory_start_mb": 120.56,
+      "memory_end_mb": 120.9,
+      "memory_delta_mb": 0.34,
+      "timestamp": "2025-11-23T02:51:35.154873",
+      "query_preview": "\n        SELECT\n            symbol,\n            exchange,\n            market_cap,\n            sector,\n            industry,\n            quarterlyrevenuegrowthyoy,\n            quarterlyearningsgrowthyo..."
+    },
+    {
+      "name": "Query 2: Combined Market Data (Price + Volume + Volatility)",
+      "execution_time": 8.138,
+      "row_count": 4779,
+      "memory_start_mb": 120.96,
+      "memory_end_mb": 121.36,
+      "memory_delta_mb": 0.4,
+      "timestamp": "2025-11-23T02:51:43.398332",
+      "query_preview": "\n        WITH latest_data AS (\n            SELECT DISTINCT ON (symbol)\n                symbol,\n                close,\n                volume,\n                date\n            FROM us_daily\n           ..."
+    },
+    {
+      "name": "Query 3: Technical Indicators",
+      "execution_time": 91.579,
+      "row_count": 2276088,
+      "memory_start_mb": 119.36,
+      "memory_end_mb": 1894.54,
+      "memory_delta_mb": 1775.18,
+      "timestamp": "2025-11-23T02:53:15.076212",
+      "query_preview": "\n        WITH atr_data AS (\n            SELECT\n                symbol,\n                atr,\n                close,\n                date,\n                ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY..."
+    },
+    {
+      "name": "Query 4-0: MAX date",
+      "execution_time": 258.794,
+      "row_count": 1,
+      "memory_start_mb": 1877.16,
+      "memory_end_mb": 1875.69,
+      "memory_delta_mb": -1.48,
+      "timestamp": "2025-11-23T02:57:41.386563",
+      "query_preview": "SELECT MAX(date) FROM us_option"
+    },
+    {
+      "name": "Query 4a: P/C Ratio",
+      "execution_time": 11.758,
+      "row_count": 669,
+      "memory_start_mb": 1875.69,
+      "memory_end_mb": 1875.69,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:57:53.231138",
+      "query_preview": "\n            SELECT\n                symbol,\n                SUM(CASE WHEN type = 'call' THEN volume ELSE 0 END) as call_volume,\n                SUM(CASE WHEN type = 'put' THEN volume ELSE 0 END) as pu..."
+    },
+    {
+      "name": "Query 4b: Current IV",
+      "execution_time": 0.324,
+      "row_count": 486,
+      "memory_start_mb": 1875.69,
+      "memory_end_mb": 1875.69,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T02:57:53.643312",
+      "query_preview": "\n            SELECT\n                symbol,\n                AVG(implied_volatility) as current_iv\n            FROM us_option\n            WHERE date = $1\n              AND symbol = ANY($2::text[])\n    ..."
+    },
+    {
+      "name": "Query 4c: IV Range",
+      "execution_time": 11.673,
+      "row_count": 2807,
+      "memory_start_mb": 1875.69,
+      "memory_end_mb": 1875.73,
+      "memory_delta_mb": 0.04,
+      "timestamp": "2025-11-23T02:58:05.401586",
+      "query_preview": "\n            SELECT\n                symbol,\n                MIN(implied_volatility) as iv_min,\n                MAX(implied_volatility) as iv_max\n            FROM us_option\n            WHERE date >= ($..."
+    },
+    {
+      "name": "Query 5: Analyst",
+      "execution_time": 0.37,
+      "row_count": 3426,
+      "memory_start_mb": 1875.73,
+      "memory_end_mb": 1875.76,
+      "memory_delta_mb": 0.04,
+      "timestamp": "2025-11-23T02:58:05.862931",
+      "query_preview": "\n        WITH latest_estimates AS (\n            SELECT\n                symbol,\n                eps_estimate_revision_up_trailing_30_days / 10000.0 as revision_up_30d,\n                eps_estimate_revi..."
+    },
+    {
+      "name": "Query 6: News Sentiment",
+      "execution_time": 0.563,
+      "row_count": 3444,
+      "memory_start_mb": 1875.76,
+      "memory_end_mb": 1875.78,
+      "memory_delta_mb": 0.02,
+      "timestamp": "2025-11-23T02:58:06.526126",
+      "query_preview": "\n        SELECT\n            ticker as symbol,\n            COUNT(*) as news_count,\n            AVG(overall_sentiment_score) as avg_sentiment\n        FROM us_news\n        WHERE time_published >= NOW() -..."
+    },
+    {
+      "name": "Phase 1-1: Fed Rate Trend",
+      "execution_time": 0.695,
+      "row_count": 1,
+      "memory_start_mb": 115.59,
+      "memory_end_mb": 115.59,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:01.987731",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_fed_funds_rate ORDER BY date DESC LIMIT 1) as current_rate,\n            (SELECT value FROM us_fed_funds_rate\n             WHERE date <= CURRENT_DATE -..."
+    },
+    {
+      "name": "Phase 1-2: CPI Trend",
+      "execution_time": 0.175,
+      "row_count": 1,
+      "memory_start_mb": 115.59,
+      "memory_end_mb": 115.59,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:02.252393",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_cpi ORDER BY date DESC LIMIT 1) as current_cpi,\n            (SELECT value FROM us_cpi\n             WHERE date <= CURRENT_DATE - INTERVAL '1 year'\n    ..."
+    },
+    {
+      "name": "Phase 1-3: Unemployment Trend",
+      "execution_time": 0.171,
+      "row_count": 1,
+      "memory_start_mb": 115.59,
+      "memory_end_mb": 115.59,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:02.516221",
+      "query_preview": "\n        SELECT\n            (SELECT value FROM us_unemployment_rate ORDER BY date DESC LIMIT 1) as current_unemployment,\n            (SELECT value FROM us_unemployment_rate\n             WHERE date <= ..."
+    },
+    {
+      "name": "Phase 1-4: Get Latest Date",
+      "execution_time": 0.173,
+      "row_count": 1,
+      "memory_start_mb": 115.6,
+      "memory_end_mb": 115.6,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:02.774031",
+      "query_preview": "\n        SELECT MAX(date) as latest_date\n        FROM us_daily\n        "
+    },
+    {
+      "name": "Phase 1-5: Check MV",
+      "execution_time": 0.171,
+      "row_count": 1,
+      "memory_start_mb": 115.6,
+      "memory_end_mb": 115.6,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:03.031006",
+      "query_preview": "\n        SELECT COUNT(*) as cnt\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        "
+    },
+    {
+      "name": "Phase 1-6: Sector Performance",
+      "execution_time": 0.179,
+      "row_count": 14,
+      "memory_start_mb": 115.61,
+      "memory_end_mb": 115.61,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:03.296103",
+      "query_preview": "\n        SELECT\n            sector_code,\n            avg_return_30d,\n            stock_count,\n            sector_rank\n        FROM mv_us_sector_daily_performance\n        WHERE date = $1\n        ORDER ..."
+    },
+    {
+      "name": "Phase 1-7: Market Sentiment",
+      "execution_time": 0.174,
+      "row_count": 0,
+      "memory_start_mb": 115.61,
+      "memory_end_mb": 115.61,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:28:03.562230",
+      "query_preview": "\n            WITH sp500_data AS (\n                SELECT\n                    date,\n                    close,\n                    LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,\n                ..."
+    },
+    {
+      "name": "Query 1: Basic Info",
+      "execution_time": 0.652,
+      "row_count": 4610,
+      "memory_start_mb": 115.61,
+      "memory_end_mb": 115.7,
+      "memory_delta_mb": 0.09,
+      "timestamp": "2025-11-23T03:28:04.302139",
+      "query_preview": "\n        SELECT\n            symbol,\n            exchange,\n            market_cap,\n            sector,\n            industry,\n            quarterlyrevenuegrowthyoy,\n            quarterlyearningsgrowthyo..."
+    },
+    {
+      "name": "Query 2: Combined Market Data (Price + Volume + Volatility)",
+      "execution_time": 2.674,
+      "row_count": 4792,
+      "memory_start_mb": 115.79,
+      "memory_end_mb": 116.07,
+      "memory_delta_mb": 0.29,
+      "timestamp": "2025-11-23T03:28:07.087711",
+      "query_preview": "\n        WITH latest_data AS (\n            SELECT DISTINCT ON (symbol)\n                symbol,\n                close,\n                volume,\n                date\n            FROM us_daily\n           ..."
+    },
+    {
+      "name": "Query 3: Technical Indicators",
+      "execution_time": 134.809,
+      "row_count": 2276531,
+      "memory_start_mb": 116.07,
+      "memory_end_mb": 1907.1,
+      "memory_delta_mb": 1791.03,
+      "timestamp": "2025-11-23T03:30:22.002642",
+      "query_preview": "\n        WITH atr_data AS (\n            SELECT\n                symbol,\n                atr,\n                close,\n                date,\n                ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY..."
+    },
+    {
+      "name": "Query 4-0: MAX date",
+      "execution_time": 217.358,
+      "row_count": 1,
+      "memory_start_mb": 1889.69,
+      "memory_end_mb": 1887.59,
+      "memory_delta_mb": -2.1,
+      "timestamp": "2025-11-23T03:34:06.067684",
+      "query_preview": "SELECT MAX(date) FROM us_option"
+    },
+    {
+      "name": "Query 4a: P/C Ratio",
+      "execution_time": 11.746,
+      "row_count": 669,
+      "memory_start_mb": 1887.59,
+      "memory_end_mb": 1887.62,
+      "memory_delta_mb": 0.03,
+      "timestamp": "2025-11-23T03:34:17.898972",
+      "query_preview": "\n            SELECT\n                symbol,\n                SUM(CASE WHEN type = 'call' THEN volume ELSE 0 END) as call_volume,\n                SUM(CASE WHEN type = 'put' THEN volume ELSE 0 END) as pu..."
+    },
+    {
+      "name": "Query 4b: Current IV",
+      "execution_time": 0.291,
+      "row_count": 486,
+      "memory_start_mb": 1887.62,
+      "memory_end_mb": 1887.62,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:34:18.274801",
+      "query_preview": "\n            SELECT\n                symbol,\n                AVG(implied_volatility) as current_iv\n            FROM us_option\n            WHERE date = $1\n              AND symbol = ANY($2::text[])\n    ..."
+    },
+    {
+      "name": "Query 4c: IV Range",
+      "execution_time": 17.659,
+      "row_count": 2807,
+      "memory_start_mb": 1887.62,
+      "memory_end_mb": 1887.64,
+      "memory_delta_mb": 0.03,
+      "timestamp": "2025-11-23T03:34:36.019835",
+      "query_preview": "\n            SELECT\n                symbol,\n                MIN(implied_volatility) as iv_min,\n                MAX(implied_volatility) as iv_max\n            FROM us_option\n            WHERE date >= ($..."
+    },
+    {
+      "name": "Query 5: Analyst",
+      "execution_time": 1.038,
+      "row_count": 3426,
+      "memory_start_mb": 1887.64,
+      "memory_end_mb": 1887.68,
+      "memory_delta_mb": 0.04,
+      "timestamp": "2025-11-23T03:34:37.150560",
+      "query_preview": "\n        WITH latest_estimates AS (\n            SELECT\n                symbol,\n                eps_estimate_revision_up_trailing_30_days / 10000.0 as revision_up_30d,\n                eps_estimate_revi..."
+    },
+    {
+      "name": "Query 6: News Sentiment",
+      "execution_time": 2.573,
+      "row_count": 3447,
+      "memory_start_mb": 1887.68,
+      "memory_end_mb": 1887.68,
+      "memory_delta_mb": 0.0,
+      "timestamp": "2025-11-23T03:34:39.819148",
+      "query_preview": "\n        SELECT\n            ticker as symbol,\n            COUNT(*) as news_count,\n            AVG(overall_sentiment_score) as avg_sentiment\n        FROM us_news\n        WHERE time_published >= NOW() -..."
+    }
+  ],
+  "phases": {
+    "phase1": 2.357723,
+    "phase2": 397.223018,
+    "phase2_5": 0.019427,
+    "phase3": 0.18385
+  },
+  "memory_snapshots": [
+    {
+      "label": "Start",
+      "timestamp": "2025-11-23T01:26:22.340556",
+      "rss_mb": 63.71,
+      "vms_mb": 398.59,
+      "percent": 0.4
+    },
+    {
+      "label": "After Phase 1",
+      "timestamp": "2025-11-23T01:26:23.935713",
+      "rss_mb": 63.8,
+      "vms_mb": 398.59,
+      "percent": 0.4
+    },
+    {
+      "label": "After Phase 2",
+      "timestamp": "2025-11-23T01:34:34.341169",
+      "rss_mb": 100.95,
+      "vms_mb": 436.41,
+      "percent": 0.64
+    },
+    {
+      "label": "After Phase 2.5",
+      "timestamp": "2025-11-23T01:34:34.362797",
+      "rss_mb": 101.14,
+      "vms_mb": 436.41,
+      "percent": 0.64
+    },
+    {
+      "label": "After Phase 3",
+      "timestamp": "2025-11-23T01:34:34.494978",
+      "rss_mb": 101.14,
+      "vms_mb": 436.41,
+      "percent": 0.64
+    },
+    {
+      "label": "Start",
+      "timestamp": "2025-11-23T02:09:48.814255",
+      "rss_mb": 98.72,
+      "vms_mb": 462.57,
+      "percent": 0.63
+    },
+    {
+      "label": "After Phase 1",
+      "timestamp": "2025-11-23T02:09:51.850706",
+      "rss_mb": 100.32,
+      "vms_mb": 463.1,
+      "percent": 0.64
+    },
+    {
+      "label": "After Phase 2",
+      "timestamp": "2025-11-23T02:22:36.422357",
+      "rss_mb": 123.56,
+      "vms_mb": 481.34,
+      "percent": 0.78
+    },
+    {
+      "label": "After Phase 2.5",
+      "timestamp": "2025-11-23T02:22:36.440464",
+      "rss_mb": 123.78,
+      "vms_mb": 481.35,
+      "percent": 0.78
+    },
+    {
+      "label": "After Phase 3",
+      "timestamp": "2025-11-23T02:22:36.589785",
+      "rss_mb": 123.82,
+      "vms_mb": 481.35,
+      "percent": 0.79
+    },
+    {
+      "label": "Start",
+      "timestamp": "2025-11-23T02:51:32.144588",
+      "rss_mb": 120.55,
+      "vms_mb": 475.67,
+      "percent": 0.76
+    },
+    {
+      "label": "After Phase 1",
+      "timestamp": "2025-11-23T02:51:34.424273",
+      "rss_mb": 120.56,
+      "vms_mb": 475.67,
+      "percent": 0.76
+    },
+    {
+      "label": "After Phase 2",
+      "timestamp": "2025-11-23T02:58:07.644475",
+      "rss_mb": 113.37,
+      "vms_mb": 480.74,
+      "percent": 0.72
+    },
+    {
+      "label": "After Phase 2.5",
+      "timestamp": "2025-11-23T02:58:07.664813",
+      "rss_mb": 113.57,
+      "vms_mb": 480.74,
+      "percent": 0.72
+    },
+    {
+      "label": "After Phase 3",
+      "timestamp": "2025-11-23T02:58:07.893137",
+      "rss_mb": 113.57,
+      "vms_mb": 480.74,
+      "percent": 0.72
+    },
+    {
+      "label": "Start",
+      "timestamp": "2025-11-23T03:28:01.292175",
+      "rss_mb": 115.59,
+      "vms_mb": 481.43,
+      "percent": 0.73
+    },
+    {
+      "label": "After Phase 1",
+      "timestamp": "2025-11-23T03:28:03.650090",
+      "rss_mb": 115.61,
+      "vms_mb": 481.43,
+      "percent": 0.73
+    },
+    {
+      "label": "After Phase 2",
+      "timestamp": "2025-11-23T03:34:40.873360",
+      "rss_mb": 124.32,
+      "vms_mb": 486.32,
+      "percent": 0.79
+    },
+    {
+      "label": "After Phase 2.5",
+      "timestamp": "2025-11-23T03:34:40.892982",
+      "rss_mb": 124.41,
+      "vms_mb": 486.32,
+      "percent": 0.79
+    },
+    {
+      "label": "After Phase 3",
+      "timestamp": "2025-11-23T03:34:41.077047",
+      "rss_mb": 124.41,
+      "vms_mb": 486.32,
+      "percent": 0.79
+    }
+  ],
+  "start_time": "2025-11-23T03:28:01.292027",
+  "end_time": "2025-11-23T03:34:41.077121",
+  "total_time": 399.785094,
+  "total_stocks": 4792,
+  "processed_stocks": 4610,
+  "skipped_stocks": 182
+}

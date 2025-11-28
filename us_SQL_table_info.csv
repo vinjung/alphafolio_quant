@@ -1,0 +1,766 @@
+﻿미국 주식 관련 데이터,,
+테이블명,us_intraday,
+컬럼명,데이터 타입,설명
+date,TIMESTAMP,일자시간
+symbol,VARCHAR(10),종목코드
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+close,"DECIMAL(21,2)",종가
+volume,BIGINT,거래량
+updated_at,TIMESTAMP,
+,,
+테이블명,us_daily,
+컬럼명,데이터 타입,설명
+date,DATE,일자시간
+symbol,VARCHAR(10),종목코드
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+close,"DECIMAL(21,2)",종가
+volume,BIGINT,거래량
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+per,"DECIMAL(6,2)",per
+pbr,"DECIMAL(21,2)",pbr
+updated_at,TIMESTAMP,
+,,
+테이블명,us_daily_etf,
+컬럼명,데이터 타입,설명
+date,DATE,일자시간
+symbol,VARCHAR(10),종목코드
+open,"DECIMAL(12,4)",시가
+high,"DECIMAL(12,4)",고가
+low,"DECIMAL(12,4)",저가
+close,"DECIMAL(12,4)",종가
+volume,BIGINT,거래량
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,us_weekly,
+컬럼명,데이터 타입,설명
+date,DATE,일자시간
+symbol,VARCHAR(10),종목코드
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+close,"DECIMAL(21,2)",종가
+volume,BIGINT,거래량
+updated_at,TIMESTAMP,
+,,
+테이블명,us_monthly,
+컬럼명,데이터 타입,설명
+date,DATE,일자시간
+symbol,VARCHAR(10),종목코드
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+close,"DECIMAL(21,2)",종가
+volume,BIGINT,거래량
+updated_at,TIMESTAMP,
+,,
+테이블명,us_indicators,
+컬럼명,데이터 타입,
+symbol,VARCHAR(10),
+stock_name,VARCHAR(200),
+date,DATE,
+rsi,"DECIMAL(20,4)",
+macd,"DECIMAL(20,4)",
+macd_signal,"DECIMAL(20,4)",
+macd_hist,"DECIMAL(20,4)",
+real_upper_band,"DECIMAL(20,4)",
+real_middle_band,"DECIMAL(20,4)",
+real_lower_band,"DECIMAL(20,4)",
+vwap,"DECIMAL(20,4)",
+eod_vwap,"DECIMAL(20,4)",
+avg_vwap,"DECIMAL(20,4)",
+price_vs_vwap,"DECIMAL(20,4)",
+atr,"DECIMAL(20,4)",
+slowk,"DECIMAL(20,4)",
+slowd,"DECIMAL(20,4)",
+mfi,"DECIMAL(20,4)",
+roc,"DECIMAL(20,4)",
+sma,"DECIMAL(20,4)",
+ema,"DECIMAL(20,4)",
+adx,"DECIMAL(20,4)",
+wma,"DECIMAL(20,4)",
+aroon,"DECIMAL(20,4)",
+cci,"DECIMAL(20,4)",
+obv,"DECIMAL(20,4)",
+created_at,TIMESTAMP,
+,,
+테이블명,us_option,
+컬럼명,데이터 타입,
+contract_id,VARCHAR(30),
+symbol,VARCHAR(10),
+expiration,DATE,
+strike,"NUMERIC(10, 2)",
+type,VARCHAR(10),
+last,"NUMERIC(10, 2)",
+mark,"NUMERIC(10, 2)",
+bid,"NUMERIC(10, 2)",
+bid_size,INTEGER,
+ask,"NUMERIC(10, 2)",
+ask_size,INTEGER,
+volume,INTEGER,
+open_interest,INTEGER,
+date,DATE,
+implied_volatility,"NUMERIC(10, 5)",
+delta,"NUMERIC(10, 5)",
+gamma,"NUMERIC(10, 5)",
+theta,"NUMERIC(10, 5)",
+vega,"NUMERIC(10, 5)",
+rho,"NUMERIC(10, 5)",
+,,
+테이블명,us_option_daily_summary,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(20),종목코드
+date,DATE,거래날짜
+total_call_volume,BIGINT,해당 날짜의 모든 Call 옵션 거래량 합계
+total_put_volume,BIGINT,해당 날짜의 모든 Put 옵션 거래량 합계
+avg_implied_volatility,"NUMERIC(10, 5)",평균 내재변동성
+min_implied_volatility,"NUMERIC(10, 5)",최소 내재변동성
+max_implied_volatility,"NUMERIC(10, 5)",최대 내재변동성
+avg_call_iv,"NUMERIC(10, 5)",
+avg_put_iv,"NUMERIC(10, 5)",
+call_option_count,INTEGER,
+put_option_count,INTEGER,
+,,
+,,
+테이블명,us_rsi,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격 weekly
+time_period,INTEGER,기간: 40
+series_type,VARCHAR(50),시리즈 유형
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+rsi,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_macd,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격 daily
+fast_period,INTEGER,Fast 기간
+slow_period,INTEGER,Slow 기간
+signal_period,INTEGER,Signal 기간
+series_type,VARCHAR(50),"시리즈 유형 (예: open, close)"
+date,DATE,데이터 기준일
+macd,"DECIMAL(20,4)",MACD 값
+macd_signal,"DECIMAL(20,4)",MACD 시그널 값
+macd_hist,"DECIMAL(20,4)",MACD 히스토그램 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_bbands,볼린저밴드
+컬럼명,데이터 타입,설명
+id,SERIAL,기본키 (자동 증가)
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),지표명
+last_refreshed,DATE,최근 갱신 일자
+interval,VARCHAR(20),데이터 간격 daily
+time_period,INTEGER,기간
+deviation_multiplier_upper,INTEGER,상단 밴드 편차 배수
+deviation_multiplier_lower,INTEGER,하단 밴드 편차 배수
+ma_type,INTEGER,이동평균 타입
+series_type,VARCHAR(50),시리즈 종류
+time_zone,VARCHAR(50),시간대
+date,DATE,데이터 기준일
+real_upper_band,"DECIMAL(20,4)",실제 상단 밴드 값
+real_middle_band,"DECIMAL(20,4)",실제 중간 밴드 값 (이동평균 값)
+real_lower_band,"DECIMAL(20,4)",실제 하단 밴드 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_vwap_base,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 (예: Simple Moving Average)
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격 (예: weekly)
+time_zone,VARCHAR(50),시간대 (예: US/Eastern)
+datetime,TIMESTAMP,
+date,DATE,지표 계산 대상 날짜
+vwap,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_vwap,주가의 상승과 하락 강도 (과매수 과매도)
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+close,"DECIMAL(21,2)",종가
+volume,BIGINT,거래량
+eod_vwap,"DECIMAL(20,4)",end of day vwap
+avg_vwap,"DECIMAL(20,4)",평균 vwap
+price_vs_vwap,"DECIMAL(20,4)",Price/VWAP Ratio
+date,DATE,지표 계산 대상 날짜
+created_at,TIMESTAMP,
+,,
+테이블명,us_atr,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 (예: Simple Moving Average)
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: daily
+time_period,INTEGER,기간: 14
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+atr,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_stoch,"2024 01 부터 interval=daily, fastkperiod=14, slowkperiod=3, slowdperiod=3 , slowkmatype=0, slowdmatype=0"
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),지표명
+last_refreshed,DATE,최근 갱신 일자
+interval,VARCHAR(20),데이터 간격: daily
+fastk_period,INTEGER,FastK 기간: 14
+slowk_period,INTEGER,SlowK 기간:3
+slowk_ma_type,INTEGER,SlowK 이동평균 타입 :3
+slowd_period,INTEGER,SlowD 기간: 0
+slowd_ma_type,INTEGER,SlowD 이동평균 타입: 0
+time_zone,VARCHAR(50),시간대
+date,DATE,데이터 기준일
+slowk,"DECIMAL(20,4)",SlowK 값
+slowd,"DECIMAL(20,4)",SlowD 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_mfi,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: daily
+time_period,INTEGER,기간 14
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+mfi,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_roc,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 8
+series_type,VARCHAR(50),시리즈 유형
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+roc,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_sma,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 3
+series_type,VARCHAR(50),시리즈 유형
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+sma,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_ema,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 10
+series_type,VARCHAR(50),시리즈 유형
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+ema,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_adx,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 7
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+adx,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_wma,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 10
+series_type,VARCHAR(50),시리즈 유형
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+wma,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_aroon,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_period,INTEGER,기간: 5
+time_zone,VARCHAR(50),시간대
+date,DATE,지표 계산 대상 날짜
+aroon,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_stock_basic,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+assettype,VARCHAR(50),자산 유형 (예: Common Stock)
+stock_name,TEXT,회사 이름
+description,TEXT,회사 설명
+cik,VARCHAR(20),고유 기업 식별번호
+exchange,VARCHAR(10),거래소 명
+currency,VARCHAR(10),통화 코드 (예: USD)
+country,VARCHAR(50),국가명
+sector,VARCHAR(50),산업 부문
+industry,VARCHAR(100),산업 분야
+address,TEXT,회사 주소
+officialSite,TEXT,공식 웹사이트 URL
+fiscalyearend,VARCHAR(20),회계 연도 종료 월
+latestquarter,DATE,최근 분기 날짜
+market_cap,BIGINT,시가 총액
+ebitda,BIGINT,EBITDA
+per,"NUMERIC(10, 4)",주가 수익 비율 (PER)
+peg,"NUMERIC(10, 4)",PEG 비율
+bookvalue,"NUMERIC(10, 4)",주당 장부 가치
+dividendpershare,"NUMERIC(10, 4)",주당 배당금
+dividendyield,"NUMERIC(10, 6)",배당 수익률
+eps,"NUMERIC(10, 4)",주당 순이익
+revenuepersharettm,"NUMERIC(12, 4)",주당 매출 (최근 12개월 기준)
+profitmargin,"NUMERIC(10, 6)",이익률
+operatingmarginttm,"NUMERIC(10, 6)",영업 이익률 (최근 12개월 기준)
+returnonassetsttm,"NUMERIC(10, 6)",총자산 이익률 (최근 12개월 기준)
+returnonequityttm,"NUMERIC(10, 6)",자기자본 이익률 (최근 12개월 기준)
+revenuettm,BIGINT,매출 (최근 12개월)
+grossprofitttm,BIGINT,총이익 (최근 12개월)
+dilutedepsttm,"NUMERIC(10, 4)",희석 주당 순이익 (최근 12개월)
+quarterlyearningsgrowthyoy,"NUMERIC(10, 6)",전년 동기 대비 분기 이익 성장률
+quarterlyrevenuegrowthyoy,"NUMERIC(10, 6)",전년 동기 대비 분기 매출 성장률
+analysttargetprice,"NUMERIC(12, 4)",애널리스트 목표 주가
+analystratingstrongbuy,INTEGER,애널리스트 강력매수 등급
+analystratingbuy,INTEGER,애널리스트 매수 등급
+analystratinghold,INTEGER,애널리스트 보유 등급
+analystratingsell,INTEGER,애널리스트 매도 등급
+analystratingstrongsell,INTEGER,애널리스트 강력매도 등급
+trailingpe,"NUMERIC(10, 4)",후행 PER
+forwardpe,"NUMERIC(10, 4)",선행 PER
+pricetosalesratiottm,"NUMERIC(10, 4)",주가매출비율 (최근 12개월)
+pricetobookratio,"NUMERIC(10, 4)",주가장부비율
+evtorevenue,"NUMERIC(10, 4)",기업가치 대비 매출 비율
+evtoebitda,"NUMERIC(10, 4)",기업가치 대비 EBITDA 비율
+beta,"NUMERIC(10, 6)",베타 값 (시장 대비 변동성 지표)
+week52high,"NUMERIC(12, 4)",52주 최고가
+week52low,"NUMERIC(12, 4)",52주 최저가
+day50movingaverage,"NUMERIC(12, 4)",50일 이동평균
+day200movingaverage,"NUMERIC(12, 4)",200일 이동평균
+sharesoutstanding,BIGINT,발행 주식 수
+sharesfloat,BIGINT,유통 주식 수
+percentinsiders,"NUMERIC(10, 6)",내부자 지분 비율
+percentinstitutions,"NUMERIC(10, 6)",기관 투자자 보유 비율
+dividenddate,DATE,배당 지급일
+exdividenddate,DATE,배당락일
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,
+,,
+테이블명,us_ipo_calendar,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목코드
+name,VARCHAR(100),회사명
+ipodate,DATE,상장 날짜
+priceRangeLow,"DECIMAL(21, 2)",상장 예상 금액 최소
+priceRangeHigh,"DECIMAL(21, 2)",상장 예상 금액 최대
+currency,VARCHAR(10),통화
+exchange,VARCHAR(10),exchange
+created_at,TIMESTAMP,
+,,
+테이블명,us_fed_funds_rate,연방 금리
+컬럼명,데이터 타입,설명
+name,VARCHAR(100),지표명 (예: Effective Federal Funds Rate)
+interval,VARCHAR(20),데이터 주기 (예: monthly)
+unit,VARCHAR(20),단위 (예: percent)
+date,DATE,데이터 측정 날짜
+value,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_treasury_yield,국채 수익률
+컬럼명,데이터 타입,설명
+name,VARCHAR(100),지표명 (예: 10-Year Treasury Constant Maturity Rate)
+interval,VARCHAR(20),데이터 주기 (예: monthly)
+unit,VARCHAR(20),단위 (예: percent)
+date,DATE,데이터 측정 날짜
+value,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_cpi,소비자물가지수
+컬럼명,데이터 타입,설명
+name,VARCHAR(100),지표명 (예: Consumer Price Index for all Urban Consumers)
+interval,VARCHAR(20),데이터 주기 (예: monthly)
+unit,VARCHAR(100),단위 (예: percent)
+date,DATE,데이터 측정 날짜
+value,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_unemployment_rate,실업률
+컬럼명,데이터 타입,설명
+name,VARCHAR(100),지표명 (예: Unemployment Rate)
+interval,VARCHAR(20),데이터 주기 (예: monthly)
+unit,VARCHAR(100),단위 (예: percent)
+date,DATE,데이터 측정 날짜
+value,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_cci,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격 daily
+time_period,INTEGER,기간: 20
+time_zone,VARCHAR(50),시간대 (예: US/Eastern)
+date,DATE,지표 계산 대상 날짜
+cci,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_obv,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+indicator,VARCHAR(100),기술적 지표 명 (예: Simple Moving Average)
+last_refreshed,DATE,최신 갱신 일자
+interval,VARCHAR(20),데이터 간격: weekly
+time_zone,VARCHAR(50),시간대 (예: US/Eastern)
+date,DATE,지표 계산 대상 날짜
+obv,"DECIMAL(20,4)",해당 날짜의 값
+created_at,TIMESTAMP,
+,,
+테이블명,us_income_statement,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+fiscal_date_ending,DATE,회계 종료일 (YYYY-MM-DD)
+reported_currency,VARCHAR(10),보고 통화 (예: USD)
+gross_profit,BIGINT,매출총이익
+total_revenue,BIGINT,총매출
+cost_of_revenue,BIGINT,매출원가
+cost_of_goods_and_services_sold,BIGINT,매출원가 (동일 값 중복 있을 수 있음)
+operating_income,BIGINT,영업이익
+selling_general_and_administrative,BIGINT,판관비
+research_and_development,BIGINT,연구개발비
+operating_expenses,BIGINT,영업비용
+investment_income_net,BIGINT,순투자수익 (값이 None인 경우 NULL 처리)
+net_interest_income,BIGINT,순이자수익
+interest_income,BIGINT,이자수익
+interest_expense,BIGINT,이자비용
+non_interest_income,BIGINT,기타 순이익 (None 시 NULL)
+other_non_operating_income,BIGINT,기타 비영업수익 (None 시 NULL)
+depreciation,BIGINT,감가상각비 (None 시 NULL)
+depreciation_and_amortization,BIGINT,감가상각비 및 무형자산 상각
+income_before_tax,BIGINT,법인세 차감 전 이익
+income_tax_expense,BIGINT,법인세 비용
+interest_and_debt_expense,BIGINT,이자 및 부채 비용 (None 시 NULL)
+net_income_from_continuing_operations,BIGINT,계속사업 순이익
+comprehensive_income_net_of_tax,BIGINT,세후 포괄손익 (None 시 NULL)
+ebit,BIGINT,세전영업이익 (EBIT)
+ebitda,BIGINT,세전영업이익+감가상각비 (EBITDA)
+net_income,BIGINT,순이익
+created_at,TIMESTAMP,
+,,
+테이블명,us_balance_sheet,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+fiscal_date_ending,DATE,회계 종료일 (YYYY-MM-DD)
+reported_currency,VARCHAR(10),보고 통화 (예: USD)
+total_assets,BIGINT,자산 총계
+total_current_assets,BIGINT,유동 자산
+cash_and_cash_equivalents_at_carrying_value,BIGINT,현금 및 현금성 자산
+cash_and_short_term_investments,BIGINT,현금 및 단기 투자 자산
+inventory,BIGINT,재고 자산
+current_net_receivables,BIGINT,유동순매출채권
+total_non_current_assets,BIGINT,비유동 자산
+property_plant_equipment,BIGINT,"유형자산 (토지, 건물, 설비 등)"
+accumulated_depreciation_amortization_ppe,BIGINT,유형자산 감가상각 누계 (NULL 허용)
+intangible_assets,BIGINT,무형자산
+intangible_assets_excluding_goodwill,BIGINT,영업권 제외 무형자산
+goodwill,BIGINT,영업권
+investments,BIGINT,투자자산 (NULL 허용)
+long_term_investments,BIGINT,장기 투자자산 (NULL 허용)
+short_term_investments,BIGINT,단기 투자자산
+other_current_assets,BIGINT,기타 유동 자산
+other_non_current_assets,BIGINT,기타 비유동 자산 (NULL 허용)
+total_liabilities,BIGINT,부채 총계
+total_current_liabilities,BIGINT,유동 부채
+current_accounts_payable,BIGINT,유동 매입채무
+deferred_revenue,BIGINT,이연수익 (NULL 허용)
+current_debt,BIGINT,유동 부채 중 부채 (NULL 허용)
+short_term_debt,BIGINT,단기 차입금
+total_non_current_liabilities,BIGINT,비유동 부채
+capital_lease_obligations,BIGINT,자본적 리스 부채
+long_term_debt,BIGINT,장기 차입금
+current_long_term_debt,BIGINT,유동성 장기부채
+long_term_debt_noncurrent,BIGINT,비유동성 장기부채 (NULL 허용)
+short_long_term_debt_total,BIGINT,단기 및 장기부채 합계
+other_current_liabilities,BIGINT,기타 유동 부채
+other_non_current_liabilities,BIGINT,기타 비유동 부채
+total_shareholder_equity,BIGINT,자본 총계
+treasury_stock,BIGINT,자사주 (NULL 허용)
+retained_earnings,BIGINT,이익잉여금
+common_stock,BIGINT,보통주 자본금
+common_stock_shares_outstanding,BIGINT,보통주 발행 주식수
+created_at,TIMESTAMP,
+,,
+테이블명,us_cash_flow,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+fiscal_date_ending,DATE,회계 종료일 (YYYY-MM-DD)
+reported_currency,CHAR(3),보고 통화 (예: USD)
+operating_cashflow,BIGINT,영업활동 현금흐름
+payments_for_operating_activities,BIGINT,영업활동 관련 현금지출 (None 시 NULL)
+proceeds_from_operating_activities,BIGINT,영업활동 관련 현금유입 (None 시 NULL)
+change_in_operating_liabilities,BIGINT,영업부채 변동 (None 시 NULL)
+change_in_operating_assets,BIGINT,영업자산 변동 (None 시 NULL)
+depreciation_depletion_and_amortization,BIGINT,감가상각비 등
+capital_expenditures,BIGINT,자본적 지출
+change_in_receivables,BIGINT,매출채권 변동 (None 시 NULL)
+change_in_inventory,BIGINT,재고자산 변동
+profit_loss,BIGINT,손익 (None 시 NULL)
+cashflow_from_investment,BIGINT,투자활동 현금흐름
+cashflow_from_financing,BIGINT,재무활동 현금흐름
+proceeds_from_repayments_of_short_term_debt,BIGINT,단기 부채 상환에 의한 현금유입 (None 시 NULL)
+payments_for_repurchase_of_common_stock,BIGINT,보통주 재매입에 의한 현금지출 (None 시 NULL)
+payments_for_repurchase_of_equity,BIGINT,자본 재매입에 의한 현금지출 (None 시 NULL)
+payments_for_repurchase_of_preferred_stock,BIGINT,우선주 재매입에 의한 현금지출 (None 시 NULL)
+dividend_payout,BIGINT,배당금 지급
+dividend_payout_common_stock,BIGINT,보통주 배당금 지급
+dividend_payout_preferred_stock,BIGINT,우선주 배당금 지급 (None 시 NULL)
+proceeds_from_issuance_of_common_stock,BIGINT,보통주 발행에 의한 현금유입 (None 시 NULL)
+proceeds_from_issuance_of_long_term_debt_and_capital_securities_net,BIGINT,장기 부채 및 자본 증권 발행에 의한 현금유입 (None 시 NULL)
+proceeds_from_issuance_of_preferred_stock,BIGINT,우선주 발행에 의한 현금유입 (None 시 NULL)
+proceeds_from_repurchase_of_equity,BIGINT,자본 재매입에 의한 현금유입 (None 시 NULL)
+proceeds_from_sale_of_treasury_stock,BIGINT,자사주 매각에 의한 현금유입 (None 시 NULL)
+change_in_cash_and_cash_equivalents,BIGINT,현금 및 현금성 자산 변동 (None 시 NULL)
+change_in_exchange_rate,BIGINT,환율 변동에 따른 현금 변동 (None 시 NULL)
+net_income,BIGINT,순이익
+created_at,TIMESTAMP,
+,,
+테이블명,us_earnings_estimates,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+estimate_date,DATE,예상 대상 날짜 (ex: 회계연도 마감일)
+horizon,VARCHAR(50),예상 기간 설명 (예: next fiscal year)
+eps_estimate_average,"DECIMAL(10, 4)",EPS(주당순이익) 예상 평균
+eps_estimate_high,"DECIMAL(10, 4)",EPS 예상 최고값
+eps_estimate_low,"DECIMAL(10, 4)",EPS 예상 최저값
+eps_estimate_analyst_count,INTEGER,EPS 예상 애널리스트 수
+eps_estimate_average_7_days_ago,"DECIMAL(10, 4)",7일 전 EPS 예상 평균
+eps_estimate_average_30_days_ago,"DECIMAL(10, 4)",30일 전 EPS 예상 평균
+eps_estimate_average_60_days_ago,"DECIMAL(10, 4)",60일 전 EPS 예상 평균
+eps_estimate_average_90_days_ago,"DECIMAL(10, 4)",90일 전 EPS 예상 평균
+eps_estimate_revision_up_trailing_7_days,INTEGER,최근 7일간 EPS 예상 상향 수정 건수
+eps_estimate_revision_down_trailing_7_days,INTEGER,최근 7일간 EPS 예상 하향 수정 건수
+eps_estimate_revision_up_trailing_30_days,INTEGER,최근 30일간 EPS 예상 상향 수정 건수
+eps_estimate_revision_down_trailing_30_days,INTEGER,최근 30일간 EPS 예상 하향 수정 건수
+revenue_estimate_average,"DECIMAL(20, 2)",매출액 예상 평균
+revenue_estimate_high,"DECIMAL(20, 2)",매출액 예상 최고값
+revenue_estimate_low,"DECIMAL(20, 2)",매출액 예상 최저값
+revenue_estimate_analyst_count,INTEGER,매출액 예상 애널리스트 수
+created_at,TIMESTAMP,
+,,
+테이블명,us_earnings_calendar,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+name,VARCHAR(100),회사명
+reportdate,DATE,리포트 공개 날짜
+fiscaldateending,DATE,회계기간
+estimate,"DECIMAL(18, 4)",추정치
+currency,VARCHAR(10),통화
+created_at,TIMESTAMP,
+,,
+테이블명,us_dividends,배당
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+ex_dividend_date,DATE,배당락일
+declaration_date,DATE,배당 발표 날짜
+record_date,DATE,배당 권리 확정 날짜
+payment_date,DATE,배당 지급 날짜
+amount,"DECIMAL(18, 2)",주당 배당금
+created_at,TIMESTAMP,
+,,
+테이블명,us_splits,
+컬럼명,데이터 타입,설명
+symbol,VARCHAR(10),종목 코드
+effective_date,DATE,효력 발생 날짜
+split_factor,"DECIMAL(18, 4)",주식 분할 비율
+created_at,TIMESTAMP,
+,,
+테이블명,us_news,
+컬럼명,데이터 타입,설명
+title,VARCHAR(255),제목
+url,TEXT,url
+time_published,TIMESTAMP,기사 발행시간
+authors,TEXT[],기자 이름
+summary,TEXT,요약
+banner_image,TEXT,배너 이미지
+source,VARCHAR(255),출처 이름
+category_within_source,VARCHAR(255),예시: news
+source_domain,VARCHAR(255),출처 url
+topics,JSONB,주제
+relevance_score,"DECIMAL(21,6)",relevance_score
+overall_sentiment_score,"DECIMAL(21,6)",overall_sentiment_score
+overall_sentiment_label,VARCHAR(255),overall_sentiment_label
+symbol_sentiment,JSONB,symbol_sentiment
+ticker,VARCHAR(10),ticker
+relevance_score_t,"DECIMAL(21,6)",relevance_score_t
+ticker_sentiment_score,"DECIMAL(21,6)",ticker_sentiment_score
+ticker_sentiment_label,VARCHAR(255),ticker_sentiment_label
+created_at,TIMESTAMP,
+,,
+테이블명,us_insider_transactions,원본과 동일
+컬럼명,데이터 타입,설명
+date,DATE,일자시간
+symbol,VARCHAR(10),종목코드
+executive,TEXT[],내부 거래자 이름
+executive_title,TEXT[],내부 거래자 직책
+security_type,VARCHAR(255),증권 종류
+acquisition_or_disposal,VARCHAR(255),매수 또는 매도
+shares,"DECIMAL(21,2)",거래된 주식 수량
+share_price,"DECIMAL(21,4)",거래된 주식 주당 가격
+,,
+공통 사항,,
+테이블명,market_index,
+컬럼명,데이터 타입,설명
+exchange,VARCHAR(20),"증권거래소 - 예시 KOSPI, KOSDAQ, NASDAQ, NYSE"
+close,"DECIMAL(21,2)",종가
+change_amount,"DECIMAL(21,2)",대비
+change_rate,"DECIMAL(6,2)",등락률
+open,"DECIMAL(21,2)",시가
+high,"DECIMAL(21,2)",고가
+low,"DECIMAL(21,2)",저가
+volume,BIGINT,거래량
+trading_value,BIGINT,거래대금
+date,DATE,날짜
+,,
+테이블명,us_market_regime,
+컬럼명,데이터 타입,설명
+regime,VARCHAR(20),
+vix_proxy,"DECIMAL(6,2)",
+put_call_ratio,"DECIMAL(6,4)",
+iv_skew,"DECIMAL(6,2)",
+spy_return_1m,"DECIMAL(8,4)",
+spy_return_3m,"DECIMAL(8,4)",
+spy_ma200_distance,"DECIMAL(8,4)",(price - ma200) / ma200
+nasdaq_vs_spy_3m,"DECIMAL(8,4)",QQQ return - SPY return
+fed_rate,"DECIMAL(5,4)",
+fed_rate_change_6m,"DECIMAL(5,4)",
+cpi_yoy,"DECIMAL(5,2)",
+unemployment_rate,"DECIMAL(5,2)",
+weight_value,"DECIMAL(5,4)",
+weight_quality,"DECIMAL(5,4)",
+weight_momentum,"DECIMAL(5,4)",
+weight_growth,"DECIMAL(5,4)",
+created_at,TIMESTAMP,
+,,
+테이블명,us_sector_benchmarks,
+컬럼명,데이터 타입,설명
+id,SERIAL,PRIMARY KEY
+date,DATE,
+sector,VARCHAR(50),
+stock_count,INT,
+pe_p25,"DECIMAL(10,2)",
+pe_median,"DECIMAL(10,2)",
+pe_p75,"DECIMAL(10,2)",
+forward_pe_median,"DECIMAL(10,2)",
+peg_median,"DECIMAL(10,4)",
+ps_median,"DECIMAL(10,2)",
+ev_ebitda_median,"DECIMAL(10,2)",
+gross_margin_p25,"DECIMAL(8,4)",
+gross_margin_median,"DECIMAL(8,4)",
+gross_margin_p75,"DECIMAL(8,4)",
+operating_margin_median,"DECIMAL(8,4)",
+roic_median,"DECIMAL(8,4)",
+roe_median,"DECIMAL(8,4)",
+revenue_growth_median,"DECIMAL(8,4)",
+eps_growth_median,"DECIMAL(8,4)",
+return_1m_median,"DECIMAL(8,4)",
+return_3m_median,"DECIMAL(8,4)",
+return_6m_median,"DECIMAL(8,4)",
+created_at,TIMESTAMP,
+,,
+테이블명,us_stock_grade,
+컬럼명,데이터 타입,설명
+stock_name,VARCHAR(200),종목명
+symbol,VARCHAR(10),종목 코드
+date,DATE,실행 날짜
+final_grade,VARCHAR(20),"투자 등급 (강력 매수, 매수, 매수 고려, 중립, 매도 고려, 매도, 강력 매도, 평가 불가)"
+final_score,"DECIMAL(5,1)",최종 점수 (0-100)
+value_score,"DECIMAL(5,1)",가치 팩터 점수 (0-100)
+quality_score,"DECIMAL(5,1)",품질 팩터 점수 (0-100)
+momentum_score,"DECIMAL(5,1)",모멘텀 팩터 점수 (0-100)
+growth_score,"DECIMAL(5,1)",성장 팩터 점수 (0-100)
+confidence_score,"DECIMAL(5,1)",신뢰도 점수 (%)
+expected_range_3m_min,INTEGER,향후 3개월 예상 가격 하한 (원)
+expected_range_3m_max,INTEGER,향후 3개월 예상 가격 상한 (원)
+expected_range_1y_min,INTEGER,향후 1년 예상 가격 하한 (원)
+expected_range_1y_max,INTEGER,향후 1년 예상 가격 상한 (원)
+var_95,"DECIMAL(6,2)","일일 VaR 95% (음수, %)"
+cvar_95,"DECIMAL(6,2)",
+value_momentum,"DECIMAL(5,1)",가치 팩터 모멘텀 (전월 대비 변화)
+quality_momentum,"DECIMAL(5,1)",품질 팩터 모멘텀 (전월 대비 변화)
+momentum_momentum,"DECIMAL(5,1)",모멘텀 팩터 모멘텀 (전월 대비 변화)
+growth_momentum,"DECIMAL(5,1)",성장 팩터 모멘텀 (전월 대비 변화)
+industry_rank,INTEGER,업종 내 순위
+industry_percentile,"DECIMAL(5,1)",업종 내 백분위수 (상위 X%)
+beta,"DECIMAL(6,2)",베타 계수 (시장 대비 민감도)
+volatility_annual,"DECIMAL(7,2)",연환산 변동성 (%)
+max_drawdown_1y,"DECIMAL(6,2)","1년 최대낙폭 (음수, %)"
+risk_profile_text,TEXT,리스크 프로파일 해석
+risk_recommendation,TEXT,투자자 적합성 추천
+time_series_text,TEXT,시계열 추세 해석
+signal_overall,TEXT,종합 평가 해석
+buy_signals_count,INTEGER,매수 신호 개수
+neutral_signals_count,INTEGER,중립 신호 개수
+sell_signals_count,INTEGER,매도 신호 개수
+market_state,VARCHAR(100),시장 상태 분류 (시장-유동성-섹터-변동성 등 19개 차원)
+buy_signal_1,TEXT,매수 신호 내용 1
+buy_signal_2,TEXT,매수 신호 내용 2
+buy_signal_3,TEXT,매수 신호 내용 3
+neutral_signal_1,TEXT,중립 신호 내용 1
+neutral_signal_2,TEXT,중립 신호 내용 2
+neutral_signal_3,TEXT,중립 신호 내용 3
+sell_signal_1,TEXT,매도 신호 내용 1
+sell_signal_2,TEXT,매도 신호 내용 2
+sell_signal_3,TEXT,매도 신호 내용 3
+support_1,"DECIMAL(21,2)",지지선 1 (원)
+support_2,"DECIMAL(21,2)",지지선 2 (원)
+resistance_1,"DECIMAL(21,2)",저항선 1 (원)
+resistance_2,"DECIMAL(21,2)",저항선 2 (원)
+supertrend_value,"DECIMAL(21,2)",SuperTrend 기준 가격 (원)
+trend,TEXT,SuperTrend 추세 방향 (상승/하락/중립)
+signal,TEXT,SuperTrend 매매 신호 (매수/매도/보유)
+rs_value,"DECIMAL(21,2)","상대강도(RS) 값: 종목 수익률 - 시장 수익률 (%, 20일)"
+rs_rank,TEXT,상대강도 등급 (매우강함/강함/중립/약함/매우약함)
+factor_combination_bonus,INTEGER,팩터 조합 보너스: 검증된 승리 패턴 (+30~-20)
+score_change_1m,"DECIMAL(5,1)",1개월 전 대비 점수 변화 (점)
+score_change_2m,"DECIMAL(5,1)",2개월 전 대비 점수 변화 (점)
+sector_rotation_score,INTEGER,섹터 로테이션 점수 (0-100): 업종 모멘텀 및 상대 강도
+sector_momentum,"DECIMAL(5,2)","섹터 모멘텀 (%, 최근 30일 수익률)"
+sector_rank,INTEGER,섹터 순위 (전체 섹터 중)
+sector_percentile,"DECIMAL(5,2)",섹터 백분위수 (상위 X%)
+value_v2_detail,JSONB,
+quality_v2_detail,JSONB,
+momentum_v2_detail,JSONB,
+growth_v2_detail,JSONB,
+interaction_score,"DECIMAL(5,2)",
+conviction_score,"DECIMAL(5,2)",
+created_at,TIMESTAMP,
+updated_at,TIMESTAMP,

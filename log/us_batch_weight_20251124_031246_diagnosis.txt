@@ -1,0 +1,89 @@
+================================================================================
+US BATCH WEIGHT CALCULATOR - PERFORMANCE DIAGNOSIS REPORT
+================================================================================
+
+### SUMMARY ###
+Total time: 125.35s
+Total stocks: 4858
+Processed: 4679
+Skipped: 179
+Average per stock: 0.0258s
+
+### PHASE BREAKDOWN ###
+phase1      :    2.19s (  1.7%)
+phase2      :  122.93s ( 98.1%)
+phase2_5    :    0.02s (  0.0%)
+phase3      :    0.21s (  0.2%)
+TOTAL       :  125.35s (100.0%)
+
+### QUERY ANALYSIS ###
+Total queries executed: 96
+Total query time: 777.95s
+
+Top 5 slowest queries:
+  1. Query 3: Technical Indicators
+     Time: 157.788s
+     Rows: 2,277,147
+     Memory: +1820.98MB
+
+  2. Query 3: Technical Indicators
+     Time: 148.599s
+     Rows: 2,278,255
+     Memory: +1813.66MB
+
+  3. Query 3: Technical Indicators
+     Time: 130.323s
+     Rows: 2,277,669
+     Memory: +1798.10MB
+
+  4. Query 3: Technical Indicators
+     Time: 109.840s
+     Rows: 2,272,006
+     Memory: +1810.01MB
+
+  5. Query 3: Technical Indicators
+     Time: 93.753s
+     Rows: 2,273,414
+     Memory: +1811.58MB
+
+### MEMORY ANALYSIS ###
+Memory progression:
+  Start               :    60.75 MB ( 0.39%)
+  After Phase 1       :    60.82 MB ( 0.39%)
+  After Phase 2       :    97.31 MB ( 0.62%)
+  After Phase 2.5     :    97.31 MB ( 0.62%)
+  After Phase 3       :    97.31 MB ( 0.62%)
+  Start               :    72.75 MB ( 0.46%)
+  After Phase 1       :    75.61 MB ( 0.48%)
+  After Phase 2       :   103.33 MB ( 0.66%)
+  After Phase 2.5     :   103.63 MB ( 0.66%)
+  After Phase 3       :   103.68 MB ( 0.66%)
+  Start               :   106.14 MB ( 0.67%)
+  After Phase 1       :   106.14 MB ( 0.67%)
+  After Phase 2       :   111.85 MB ( 0.71%)
+  After Phase 2.5     :   111.98 MB ( 0.71%)
+  After Phase 3       :   111.98 MB ( 0.71%)
+  Start               :    70.88 MB ( 0.45%)
+  After Phase 1       :    71.30 MB ( 0.45%)
+  After Phase 2       :   109.57 MB ( 0.69%)
+  After Phase 2.5     :   110.49 MB ( 0.70%)
+  After Phase 3       :   110.50 MB ( 0.70%)
+  Start               :    58.60 MB ( 0.37%)
+  After Phase 1       :    61.65 MB ( 0.39%)
+  After Phase 2       :   110.02 MB ( 0.70%)
+  After Phase 2.5     :   110.24 MB ( 0.70%)
+  After Phase 3       :   110.25 MB ( 0.70%)
+  Start               :    64.75 MB ( 0.41%)
+  After Phase 1       :    65.22 MB ( 0.41%)
+  After Phase 2       :   113.78 MB ( 0.72%)
+  After Phase 2.5     :   113.88 MB ( 0.72%)
+  After Phase 3       :   113.88 MB ( 0.72%)
+
+  Peak memory: 113.88 MB
+  Memory growth: 55.28 MB
+
+### RECOMMENDATIONS ###
+1. Review query execution plans with EXPLAIN ANALYZE
+2. Ensure database indexes exist for us_daily, us_stock_basic, us_option, us_earnings_estimates
+3. Monitor Materialized View refresh performance
+4. Consider parallel processing if Phase 3 becomes slow with more stocks

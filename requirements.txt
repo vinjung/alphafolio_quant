@@ -1,0 +1,14 @@
+# 프로젝트 의존성 패키지
+# pip install -r requirements.txt 명령으로 설치하세요
+
+# 기본 패키지
+psycopg2-binary>=2.9.0
+python-dotenv>=1.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Async database (for async implementation)
+asyncpg>=0.29.0
+
+# Performance monitoring (for batch_weight.py)
+psutil>=5.9.0

@@ -1,0 +1,64 @@
+================================================================================
+US BATCH WEIGHT CALCULATOR - PERFORMANCE DIAGNOSIS REPORT
+================================================================================
+
+### SUMMARY ###
+Total time: 145.49s
+Total stocks: 4605
+Processed: 4449
+Skipped: 156
+Average per stock: 0.0316s
+
+### PHASE BREAKDOWN ###
+phase1      :    1.73s (  1.2%)
+phase2      :  143.53s ( 98.7%)
+phase2_5    :    0.02s (  0.0%)
+phase3      :    0.20s (  0.1%)
+TOTAL       :  145.48s (100.0%)
+
+### QUERY ANALYSIS ###
+Total queries executed: 16
+Total query time: 136.49s
+
+Top 5 slowest queries:
+  1. Query 3: Technical Indicators
+     Time: 127.704s
+     Rows: 2,266,056
+     Memory: +1812.03MB
+
+  2. Query 2: Combined Market Data (Price + Volume + Volatility)
+     Time: 2.736s
+     Rows: 4,605
+     Memory: +3.36MB
+
+  3. Query 6: News Sentiment
+     Time: 2.480s
+     Rows: 3,331
+     Memory: +0.01MB
+
+  4. Query 1: Basic Info
+     Time: 0.763s
+     Rows: 4,449
+     Memory: +5.39MB
+
+  5. Query 5: Analyst
+     Time: 0.604s
+     Rows: 3,408
+     Memory: +0.05MB
+
+### MEMORY ANALYSIS ###
+Memory progression:
+  Start               :    62.40 MB ( 0.40%)
+  After Phase 1       :    62.46 MB ( 0.40%)
+  After Phase 2       :   101.91 MB ( 0.65%)
+  After Phase 2.5     :   102.06 MB ( 0.65%)
+  After Phase 3       :   102.14 MB ( 0.65%)
+
+  Peak memory: 102.14 MB
+  Memory growth: 39.74 MB
+
+### RECOMMENDATIONS ###
+1. Review query execution plans with EXPLAIN ANALYZE
+2. Ensure database indexes exist for us_daily, us_stock_basic, us_option, us_earnings_estimates
+3. Monitor Materialized View refresh performance
+4. Consider parallel processing if Phase 3 becomes slow with more stocks
