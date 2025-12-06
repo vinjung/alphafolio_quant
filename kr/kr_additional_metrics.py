@@ -30,6 +30,12 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
+# Phase 3.9: Scenario Probability Calibration
+try:
+    from kr_probability_calibrator import ScenarioCalibrator
+except ImportError:
+    from kr.kr_probability_calibrator import ScenarioCalibrator
+
 # Logger setup
 logging.basicConfig(
     level=logging.INFO,
@@ -58,6 +64,8 @@ class AdditionalMetricsCalculator:
         self.db_manager = db_manager
         self.factor_scores = factor_scores or {}
         self.analysis_date = analysis_date
+        # Phase 3.9: Scenario Calibrator (shared instance)
+        self.calibrator = ScenarioCalibrator(db_manager)
         logger.info(f"Additional metrics calculator initialized for {symbol}")
 
     async def execute_query(self, query: str, *params):
@@ -673,10 +681,31 @@ class AdditionalMetricsCalculator:
             sideways = result[0]['sideways_count'] or 0
             bearish = result[0]['bearish_count'] or 0
 
-            # 확률 계산
-            bullish_prob = round(bullish / total * 100) if total > 0 else 33
-            sideways_prob = round(sideways / total * 100) if total > 0 else 34
-            bearish_prob = round(bearish / total * 100) if total > 0 else 33
+            # 확률 계산 (raw probability)
+            raw_bullish = round(bullish / total * 100) if total > 0 else 33
+            raw_sideways = round(sideways / total * 100) if total > 0 else 34
+            raw_bearish = round(bearish / total * 100) if total > 0 else 33
+
+            # Phase 3.9: 캘리브레이션 적용
+            # Get theme from kr_stock_detail table
+            theme_query = """
+            SELECT theme FROM kr_stock_detail WHERE symbol = $1
+            """
+            theme_result = await self.execute_query(theme_query, self.symbol)
+            theme = theme_result[0]['theme'] if theme_result and theme_result[0]['theme'] else 'Others'
+
+            # Apply calibration
+            calibrated = self.calibrator.calibrate_probabilities(
+                raw_bullish=raw_bullish,
+                raw_bearish=raw_bearish,
+                raw_sideways=raw_sideways,
+                final_score=final_score,
+                theme=theme
+            )
+
+            bullish_prob = calibrated['bullish']
+            sideways_prob = calibrated['sideways']
+            bearish_prob = calibrated['bearish']
 
             # 예상 수익률 범위
             bullish_lower = result[0]['bullish_lower'] or 10
@@ -684,7 +713,8 @@ class AdditionalMetricsCalculator:
             bearish_lower = result[0]['bearish_lower'] or -20
             bearish_upper = result[0]['bearish_upper'] or -10
 
-            logger.info(f"Scenario: bullish={bullish_prob}%, sideways={sideways_prob}%, bearish={bearish_prob}% (n={total})")
+            logger.info(f"Scenario raw: bullish={raw_bullish}%, sideways={raw_sideways}%, bearish={raw_bearish}% (n={total})")
+            logger.info(f"Scenario calibrated: bullish={bullish_prob}%, sideways={sideways_prob}%, bearish={bearish_prob}% [theme={theme}]")
 
             return {
                 'scenario_bullish_prob': bullish_prob,
@@ -1504,7 +1534,7 @@ class AdditionalMetricsCalculator:
 
     async def calculate_factor_combination_bonus(self, value_score: float, quality_score: float,
                                                   momentum_score: float, growth_score: float,
-                                                  smart_money_score: int) -> int:
+                                                  smart_money_score: int) -> float:
         """
         Calculate Factor Combination Bonus (Phase 2)
         Rewards validated winning combinations from 2,757 stock analysis
@@ -1515,13 +1545,22 @@ class AdditionalMetricsCalculator:
         - High Quality + High/Med Momentum + SM Inflow: +4.4~4.8% -> +15 bonus
         - Low Growth: Negative returns -> -20 penalty
 
-        Storage: factor_combination_bonus INTEGER
+        Returns normalized score (0-100 scale):
+        - Raw bonus range: -20 to +30 (total 50 points)
+        - Normalized range: 0 to 100 (100-point scale)
+        - Neutral point: 0 -> 40 points
+        - Formula: (raw_bonus + 20) / 50 * 100
+
+        Storage: factor_combination_bonus DECIMAL(5,1)
 
         Returns:
-            Bonus score (can be negative for penalties)
+            float: Normalized bonus score (0-100)
+                - 0: Worst combination (raw -20)
+                - 40: Neutral (raw 0)
+                - 100: Best combination (raw +30)
         """
         try:
-            bonus = 0
+            raw_bonus = 0
 
             # Define thresholds based on 33rd, 67th percentile from analysis
             # Value: Low < 41.3 < Medium < 59.3 < High
@@ -1548,37 +1587,42 @@ class AdditionalMetricsCalculator:
             # Pattern 1: Growth Stock at Good Price + Smart Money
             # Low Value + High Growth + SM Inflow = +11.31% (358 stocks, 65.6% win rate)
             if value_low and growth_high and strong_sm:
-                bonus += 30
+                raw_bonus += 30
                 logger.info(f"  [Bonus +30] Growth stock at good price + Smart Money (+11.31% pattern)")
 
             # Pattern 2: Medium Value + High Growth + SM Inflow = +9.78% (233 stocks, 63.9% win rate)
             elif value_med and growth_high and strong_sm:
-                bonus += 25
+                raw_bonus += 25
                 logger.info(f"  [Bonus +25] Growth stock at fair price + Smart Money (+9.78% pattern)")
 
             # Pattern 3: Blue Chip Uptrend
             # High Quality + High/Med Momentum + SM Inflow = +4.4~4.8%
             elif quality_high and (momentum_high or momentum_med) and strong_sm:
-                bonus += 15
+                raw_bonus += 15
                 logger.info(f"  [Bonus +15] Blue chip uptrend + Smart Money (+4.4~4.8% pattern)")
 
             # Pattern 4: High Growth + Inflow (without value consideration)
             elif growth_high and strong_sm:
-                bonus += 10
+                raw_bonus += 10
                 logger.info(f"  [Bonus +10] High growth + Smart Money inflow")
 
             # Negative Pattern: Low Growth
             # Growth Low: Most had negative returns
             if growth_low:
-                bonus -= 20
+                raw_bonus -= 20
                 logger.info(f"  [Penalty -20] Low growth stock - historically negative returns")
 
-            logger.info(f"Factor Combination Bonus: {bonus:+d}")
-            return bonus
+            # Normalize to 0-100 scale
+            # Raw range: -20 to +30 (50 points total)
+            # Target range: 0 to 100 (100 points)
+            normalized_bonus = (raw_bonus + 20) / 50 * 100
+
+            logger.info(f"Factor Combination Bonus: raw={raw_bonus:+d}, normalized={normalized_bonus:.1f}")
+            return round(normalized_bonus, 1)
 
         except Exception as e:
             logger.error(f"Factor combination bonus calculation failed: {e}")
-            return 0
+            return 40.0  # Return neutral score (0 raw bonus -> 40 normalized)
 
     async def calculate_smart_money_momentum_score(self) -> int:
         """
@@ -1962,6 +2006,129 @@ class AdditionalMetricsCalculator:
             logger.error(f"Sector rotation calculation failed: {e}")
             return 50, None, None, None
 
+    async def calculate_risk_adjusted_returns(self) -> Dict:
+        """
+        Risk-Adjusted Return metrics calculation (Phase 3.9)
+
+        Returns:
+            Dict: sharpe_ratio, sortino_ratio, calmar_ratio
+
+        Note:
+            - Based on 60-day holding period (highest IC according to phase3_9 analysis)
+            - Risk-free rate: 3.5% annual
+            - Sharpe Ratio: (Return - Rf) / Volatility
+            - Sortino Ratio: (Return - Rf) / Downside Deviation
+            - Calmar Ratio: Return / Max Drawdown
+        """
+        try:
+            # Risk-free rate (3.5% annual)
+            rf_annual = 3.5
+            holding_days = 60
+            rf_60d = rf_annual * (holding_days / 252)
+
+            # 1. Calculate 60-day return and volatility
+            return_query = """
+            WITH price_data AS (
+                SELECT
+                    date,
+                    close,
+                    FIRST_VALUE(close) OVER (ORDER BY date) as start_price,
+                    LAST_VALUE(close) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) as end_price,
+                    (close / LAG(close, 1) OVER (ORDER BY date) - 1) * 100 as daily_return
+                FROM kr_intraday_total
+                WHERE symbol = $1 AND date >= CURRENT_DATE - INTERVAL '60 days'
+                ORDER BY date
+            )
+            SELECT
+                (MAX(end_price) - MAX(start_price)) / MAX(start_price) * 100 as return_60d,
+                STDDEV(daily_return) as daily_std,
+                COUNT(*) as trading_days
+            FROM price_data
+            WHERE daily_return IS NOT NULL
+            """
+
+            result = await self.execute_query(return_query, self.symbol)
+
+            if not result or len(result) == 0:
+                logger.warning(f"[{self.symbol}] No return data for risk-adjusted metrics")
+                return {
+                    'sharpe_ratio': None,
+                    'sortino_ratio': None,
+                    'calmar_ratio': None
+                }
+
+            row = result[0]
+            return_60d = float(row['return_60d']) if row['return_60d'] else 0
+            daily_std = float(row['daily_std']) if row['daily_std'] else 0
+            trading_days = int(row['trading_days']) if row['trading_days'] else 0
+
+            # 60-day volatility (daily std -> 60-day volatility)
+            volatility_60d = daily_std * np.sqrt(trading_days) if trading_days > 0 else 0
+
+            # 2. Sharpe Ratio
+            if volatility_60d > 0:
+                sharpe_ratio = (return_60d - rf_60d) / volatility_60d
+            else:
+                sharpe_ratio = 0
+
+            # 3. Sortino Ratio (downside deviation only)
+            downside_query = """
+            WITH daily_returns AS (
+                SELECT
+                    (close / LAG(close, 1) OVER (ORDER BY date) - 1) * 100 as daily_return
+                FROM kr_intraday_total
+                WHERE symbol = $1 AND date >= CURRENT_DATE - INTERVAL '60 days'
+                ORDER BY date
+            )
+            SELECT
+                STDDEV(daily_return) as downside_deviation,
+                COUNT(*) as negative_days
+            FROM daily_returns
+            WHERE daily_return < 0 AND daily_return IS NOT NULL
+            """
+
+            downside_result = await self.execute_query(downside_query, self.symbol)
+
+            if downside_result and len(downside_result) > 0 and downside_result[0]['downside_deviation']:
+                downside_deviation = float(downside_result[0]['downside_deviation'])
+                negative_days = int(downside_result[0]['negative_days'])
+                downside_deviation_60d = downside_deviation * np.sqrt(negative_days) if negative_days > 0 else 0
+
+                if downside_deviation_60d > 0:
+                    sortino_ratio = (return_60d - rf_60d) / downside_deviation_60d
+                else:
+                    sortino_ratio = 0
+            else:
+                sortino_ratio = None
+
+            # 4. Calmar Ratio (reuse MDD)
+            max_drawdown = await self.calculate_max_drawdown_1y()
+
+            if max_drawdown and max_drawdown != 0:
+                # MDD is negative, use absolute value
+                calmar_ratio = return_60d / abs(max_drawdown)
+            else:
+                calmar_ratio = None
+
+            sharpe_str = f"{sharpe_ratio:.3f}" if sharpe_ratio is not None else "N/A"
+            sortino_str = f"{sortino_ratio:.3f}" if sortino_ratio is not None else "N/A"
+            calmar_str = f"{calmar_ratio:.3f}" if calmar_ratio is not None else "N/A"
+            logger.info(f"[{self.symbol}] Risk-Adjusted Returns: Sharpe={sharpe_str}, Sortino={sortino_str}, Calmar={calmar_str}")
+
+            return {
+                'sharpe_ratio': round(sharpe_ratio, 4) if sharpe_ratio is not None else None,
+                'sortino_ratio': round(sortino_ratio, 4) if sortino_ratio is not None else None,
+                'calmar_ratio': round(calmar_ratio, 4) if calmar_ratio is not None else None
+            }
+
+        except Exception as e:
+            logger.error(f"[{self.symbol}] Risk-adjusted returns calculation failed: {e}")
+            return {
+                'sharpe_ratio': None,
+                'sortino_ratio': None,
+                'calmar_ratio': None
+            }
+
     async def calculate_all_metrics(self) -> Dict:
         """
         Calculate all 15 metrics (9 fundamental + 4 technical + 2 new signals)
@@ -2072,13 +2239,20 @@ class AdditionalMetricsCalculator:
             'sector_percentile': sector_percentile
         }
 
-        logger.info("All 19 metrics calculated successfully")
+        # Phase 3.9: Risk-Adjusted Returns (3)
+        risk_adjusted = await self.calculate_risk_adjusted_returns()
+        metrics['sharpe_ratio'] = risk_adjusted.get('sharpe_ratio')
+        metrics['sortino_ratio'] = risk_adjusted.get('sortino_ratio')
+        metrics['calmar_ratio'] = risk_adjusted.get('calmar_ratio')
+
+        logger.info("All 22 metrics calculated successfully")
         logger.info(f"  - Fundamental/Risk: 9 metrics")
         logger.info(f"  - Technical: 4 indicators (S/R, SuperTrend, RS)")
         logger.info(f"  - Phase 1 Signals: 2 scores (Smart Money, Volatility Context)")
         logger.info(f"  - Phase 2 Signals: 2 scores (Factor Combo, SM Momentum)")
         logger.info(f"  - Phase 3.1 Signal: 1 score (Score Momentum)")
         logger.info(f"  - Phase 3.2 Signal: 1 score (Sector Rotation)")
+        logger.info(f"  - Phase 3.9 Risk-Adjusted: 3 ratios (Sharpe, Sortino, Calmar)")
         return metrics
 
     def close(self):

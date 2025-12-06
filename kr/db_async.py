@@ -61,6 +61,7 @@ class AsyncDatabaseManager:
                 min_size=min_size,
                 max_size=max_size,
                 command_timeout=600,
+                timeout=30,  # Connection acquisition timeout
                 max_inactive_connection_lifetime=3600,
                 server_settings={
                     'statement_timeout': '600000',
@@ -87,7 +88,7 @@ class AsyncDatabaseManager:
         Returns:
             List of dict results
         """
-        max_retries = 2
+        max_retries = 3
         for attempt in range(max_retries + 1):
             try:
                 async with self.connection_pool.acquire() as conn:
@@ -144,7 +145,7 @@ class AsyncDatabaseManager:
         Returns:
             Status string
         """
-        max_retries = 2
+        max_retries = 3
         for attempt in range(max_retries + 1):
             try:
                 async with self.connection_pool.acquire() as conn:
@@ -350,6 +351,27 @@ async def save_to_kr_stock_grade(
 
         if overflow_detected:
             logger.error(f"[{symbol}] All score values: {score_fields}")
+
+        # Validate DECIMAL(5,2) risk metrics and clip to safe range
+        # DECIMAL(5,2) limit: -999.99 ~ 999.99
+        risk_metrics = {
+            'volatility_annual': data.get('volatility_annual'),
+            'beta': data.get('beta'),
+            'max_drawdown_1y': data.get('max_drawdown_1y'),
+            'var_95': data.get('var_95'),
+            'cvar_95': data.get('cvar_95')
+        }
+
+        for field_name, value in risk_metrics.items():
+            if value is not None:
+                if abs(value) >= 1000:
+                    original_value = value
+                    clipped_value = 999.99 if value > 0 else -999.99
+                    data[field_name] = clipped_value
+                    logger.warning(
+                        f"[{symbol}] CLIPPED {field_name}: {original_value:.2f} -> {clipped_value:.2f} "
+                        f"(DECIMAL(5,2) limit)"
+                    )
 
         # Phase Agent: 컬럼 구조 변경 (2025-11-27)
         # 제거: base_*_score, expected_range_*, support_*, resistance_*, supertrend_*, trend, signal

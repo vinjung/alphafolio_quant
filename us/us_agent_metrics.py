@@ -29,6 +29,58 @@ from us_db_async import AsyncDatabaseManager
 
 logger = logging.getLogger(__name__)
 
+# ========================================================================
+# Phase 3.1 ATR Multiplier Configuration (Backtest Results)
+# ========================================================================
+# Backtest: 2024-10 ~ 2025-11 (14 months, 10000 samples)
+# Optimization target: Max avg PnL with acceptable trigger rate
+#
+# | ATR Mult | Trigger | Avg PnL | Win Rate | P/L Ratio |
+# |----------|---------|---------|----------|-----------|
+# | 1.0x     | 70.7%   | +2.12%  | 15.7%    | 6.87      |
+# | 2.0x     | 45.8%   | +6.93%  | 24.2%    | 4.65      |
+# | 4.0x     | 17.7%   | +13.34% | 28.7%    | 3.77      |
+# ========================================================================
+
+ATR_MULTIPLIER_DEFAULT = 4.0
+
+ATR_MULTIPLIER_BY_SECTOR = {
+    'ENERGY': 1.5,
+    'CONSUMER DEFENSIVE': 1.5,
+    'BASIC MATERIALS': 3.5,
+    'REAL ESTATE': 3.5,
+    'TECHNOLOGY': 3.5,
+    'FINANCIAL SERVICES': 3.5,
+    'INDUSTRIALS': 3.5,
+    'HEALTHCARE': 3.5,
+    'UTILITIES': 3.5,
+    'CONSUMER CYCLICAL': 3.5,
+    'COMMUNICATION SERVICES': 3.5
+}
+
+# ========================================================================
+# Phase 3.1 Scenario Calibration Coefficients (Regression Results)
+# ========================================================================
+# Analysis: Predicted vs Actual scenario occurrence rate
+# Formula: calibrated_prob = slope * predicted_prob + intercept
+#
+# | Scenario | Predicted Avg | Actual Rate | Bias      |
+# |----------|---------------|-------------|-----------|
+# | bull     | 29.1%         | 24.7%       | Overest.  |
+# | base     | 40.1%         | 47.0%       | Underest. |
+# | bear     | 30.7%         | 28.3%       | Slight    |
+#
+# Calibration formulas (linear regression):
+# - bull: calibrated = 0.124 * predicted + 0.233 (R²=0.113)
+# - bear: calibrated = 0.612 * predicted + 0.095 (R²=0.956)
+# - base: derived from (1 - bull - bear) to ensure sum = 100%
+# ========================================================================
+
+SCENARIO_CALIBRATION = {
+    'bull': {'slope': 0.124, 'intercept': 0.233},
+    'bear': {'slope': 0.612, 'intercept': 0.095}
+}
+
 
 class USAgentMetrics:
     """
@@ -55,29 +107,38 @@ class USAgentMetrics:
     # ========================================================================
 
     async def calculate_atr_stop_take_profit(
-        self, symbol: str, analysis_date: date
+        self, symbol: str, analysis_date: date, sector: Optional[str] = None
     ) -> Dict[str, Optional[float]]:
         """
         Calculate ATR-based stop loss and take profit levels
 
         Uses us_atr table (14-day ATR) and us_daily table for current price.
 
+        Phase 3.1 Update:
+            - ATR multiplier now sector-specific based on backtest results
+            - Default: 4.0x ATR (optimal for avg PnL)
+            - ENERGY/CONSUMER DEFENSIVE: 1.5x ATR (higher volatility)
+            - Other sectors: 3.5x ATR
+
         Logic:
             - atr_pct = (ATR / close) * 100
-            - stop_loss_pct = -2 * atr_pct (2 ATR below)
-            - take_profit_pct = 3 * atr_pct (3 ATR above)
-            - risk_reward_ratio = 1.5 (3/2)
+            - atr_multiplier = sector-specific or default (4.0x)
+            - stop_loss_pct = -atr_multiplier * atr_pct
+            - take_profit_pct = atr_multiplier * 1.5 * atr_pct (R:R = 1.5)
+            - risk_reward_ratio = 1.5
 
         Args:
             symbol: Stock symbol
             analysis_date: Analysis date
+            sector: Stock sector (for sector-specific ATR multiplier)
 
         Returns:
             {
                 'atr_pct': float or None,
                 'stop_loss_pct': float or None,
                 'take_profit_pct': float or None,
-                'risk_reward_ratio': float or None
+                'risk_reward_ratio': float or None,
+                'atr_multiplier': float or None
             }
         """
         query = """
@@ -97,7 +158,8 @@ class USAgentMetrics:
                     'atr_pct': None,
                     'stop_loss_pct': None,
                     'take_profit_pct': None,
-                    'risk_reward_ratio': None
+                    'risk_reward_ratio': None,
+                    'atr_multiplier': None
                 }
 
             atr = float(result[0]['atr'])
@@ -108,19 +170,24 @@ class USAgentMetrics:
                     'atr_pct': None,
                     'stop_loss_pct': None,
                     'take_profit_pct': None,
-                    'risk_reward_ratio': None
+                    'risk_reward_ratio': None,
+                    'atr_multiplier': None
                 }
 
+            # Phase 3.1: Sector-specific ATR multiplier
+            atr_multiplier = ATR_MULTIPLIER_BY_SECTOR.get(sector, ATR_MULTIPLIER_DEFAULT)
+
             atr_pct = (atr / close) * 100
-            stop_loss_pct = -2 * atr_pct
-            take_profit_pct = 3 * atr_pct
-            risk_reward_ratio = 1.5  # 3 / 2
+            stop_loss_pct = -atr_multiplier * atr_pct
+            take_profit_pct = atr_multiplier * 1.5 * atr_pct  # R:R = 1.5
+            risk_reward_ratio = 1.5
 
             return {
                 'atr_pct': round(atr_pct, 2),
                 'stop_loss_pct': round(stop_loss_pct, 2),
                 'take_profit_pct': round(take_profit_pct, 2),
-                'risk_reward_ratio': round(risk_reward_ratio, 2)
+                'risk_reward_ratio': round(risk_reward_ratio, 2),
+                'atr_multiplier': atr_multiplier
             }
 
         except Exception as e:
@@ -129,7 +196,8 @@ class USAgentMetrics:
                 'atr_pct': None,
                 'stop_loss_pct': None,
                 'take_profit_pct': None,
-                'risk_reward_ratio': None
+                'risk_reward_ratio': None,
+                'atr_multiplier': None
             }
 
     # ========================================================================
@@ -167,7 +235,7 @@ class USAgentMetrics:
         score_query = """
         SELECT final_score
         FROM us_stock_grade
-        WHERE symbol = $1 AND date <= $2 - INTERVAL '14 days'
+        WHERE symbol = $1 AND date <= $2::date - INTERVAL '14 days'
         ORDER BY date DESC
         LIMIT 1
         """
@@ -180,7 +248,7 @@ class USAgentMetrics:
                 MIN(low) as low_52w
             FROM us_daily
             WHERE symbol = $1
-              AND date > $2 - INTERVAL '252 days'
+              AND date > $2::date - INTERVAL '252 days'
               AND date <= $2
         ),
         current_price AS (
@@ -306,7 +374,422 @@ class USAgentMetrics:
             return None
 
     # ========================================================================
-    # 4. IV Percentile (US-specific)
+    # 4. Multi-Tier Stop Loss (Phase 3.3 Enhancement)
+    # ========================================================================
+
+    async def calculate_trailing_stop(
+        self,
+        symbol: str,
+        analysis_date: date,
+        entry_price: float,
+        max_price_since_entry: float,
+        current_price: float
+    ) -> Dict[str, Any]:
+        """
+        Calculate Trailing Stop Loss
+
+        Protects profits after 10%+ gain by selling on 5% drop from peak.
+
+        Logic:
+            - Activate when current_return > 10%
+            - Trigger when price drops 5% from peak since entry
+
+        Args:
+            symbol: Stock symbol
+            analysis_date: Analysis date
+            entry_price: Entry price when position opened
+            max_price_since_entry: Maximum price reached since entry
+            current_price: Current price
+
+        Returns:
+            {
+                'trailing_stop_triggered': bool,
+                'current_return': float (decimal, e.g., 0.15 = 15%),
+                'return_from_peak': float (decimal),
+                'max_price_since_entry': float
+            }
+        """
+        try:
+            if entry_price <= 0 or max_price_since_entry <= 0 or current_price <= 0:
+                return {
+                    'trailing_stop_triggered': False,
+                    'current_return': None,
+                    'return_from_peak': None,
+                    'max_price_since_entry': None
+                }
+
+            # Calculate returns
+            current_return = (current_price - entry_price) / entry_price
+            return_from_peak = (current_price - max_price_since_entry) / max_price_since_entry
+
+            # Trigger conditions
+            profit_threshold_met = current_return > 0.10  # 10% profit
+            peak_drop_threshold_met = return_from_peak <= -0.05  # 5% drop from peak
+
+            triggered = profit_threshold_met and peak_drop_threshold_met
+
+            return {
+                'trailing_stop_triggered': triggered,
+                'current_return': round(current_return, 4),
+                'return_from_peak': round(return_from_peak, 4),
+                'max_price_since_entry': max_price_since_entry
+            }
+
+        except Exception as e:
+            logger.error(f"{symbol}: Trailing stop calculation failed - {e}")
+            return {
+                'trailing_stop_triggered': False,
+                'current_return': None,
+                'return_from_peak': None,
+                'max_price_since_entry': None
+            }
+
+    async def calculate_time_based_stop(
+        self,
+        symbol: str,
+        analysis_date: date,
+        entry_date: date,
+        entry_price: float,
+        current_price: float
+    ) -> Dict[str, Any]:
+        """
+        Calculate Time-Based Stop Loss
+
+        Exits underperforming positions after holding period.
+
+        Logic:
+            - After 60 days of holding
+            - If position is down 5% or more
+            - Exit to free capital for better opportunities
+
+        Args:
+            symbol: Stock symbol
+            analysis_date: Analysis date
+            entry_date: Date when position was opened
+            entry_price: Entry price
+            current_price: Current price
+
+        Returns:
+            {
+                'time_stop_triggered': bool,
+                'holding_days': int,
+                'current_return': float (decimal)
+            }
+        """
+        try:
+            if entry_price <= 0 or current_price <= 0:
+                return {
+                    'time_stop_triggered': False,
+                    'holding_days': None,
+                    'current_return': None
+                }
+
+            # Calculate holding period
+            holding_days = (analysis_date - entry_date).days
+
+            # Calculate return
+            current_return = (current_price - entry_price) / entry_price
+
+            # Trigger conditions
+            holding_threshold_met = holding_days >= 60  # 60 days
+            loss_threshold_met = current_return <= -0.05  # -5% loss
+
+            triggered = holding_threshold_met and loss_threshold_met
+
+            return {
+                'time_stop_triggered': triggered,
+                'holding_days': holding_days,
+                'current_return': round(current_return, 4)
+            }
+
+        except Exception as e:
+            logger.error(f"{symbol}: Time-based stop calculation failed - {e}")
+            return {
+                'time_stop_triggered': False,
+                'holding_days': None,
+                'current_return': None
+            }
+
+    async def _get_score_rank(
+        self,
+        symbol: str,
+        analysis_date: date,
+        current_score: float
+    ) -> Optional[float]:
+        """
+        Get score percentile rank among all stocks
+
+        Args:
+            symbol: Stock symbol
+            analysis_date: Analysis date
+            current_score: Current final_score
+
+        Returns:
+            Percentile rank (0-1), e.g., 0.85 = top 15%
+        """
+        query = """
+        WITH score_ranks AS (
+            SELECT
+                symbol,
+                final_score,
+                PERCENT_RANK() OVER (ORDER BY final_score) as rank_pct
+            FROM us_stock_grade
+            WHERE date <= $1
+            ORDER BY date DESC
+            LIMIT 5000
+        )
+        SELECT rank_pct
+        FROM score_ranks
+        WHERE symbol = $2
+        """
+
+        try:
+            result = await self.db.execute_query(query, analysis_date, symbol)
+
+            if result and result[0].get('rank_pct') is not None:
+                return float(result[0]['rank_pct'])
+
+            return None
+
+        except Exception as e:
+            logger.error(f"{symbol}: Score rank calculation failed - {e}")
+            return None
+
+    async def calculate_score_degradation_stop(
+        self,
+        symbol: str,
+        analysis_date: date,
+        initial_score: float,
+        initial_score_rank: float,
+        current_score: float
+    ) -> Dict[str, Any]:
+        """
+        Calculate Score Degradation Stop Loss
+
+        Exits positions when factor scores deteriorate significantly.
+
+        Logic:
+            - Initial position was top 20% (rank > 0.80)
+            - Current position dropped to bottom 50% (rank < 0.50)
+            - Indicates fundamental deterioration
+
+        Args:
+            symbol: Stock symbol
+            analysis_date: Analysis date
+            initial_score: Final score when position opened
+            initial_score_rank: Percentile rank at entry (0-1)
+            current_score: Current final score
+
+        Returns:
+            {
+                'score_degradation_stop_triggered': bool,
+                'initial_score': float,
+                'current_score': float,
+                'initial_score_rank': float,
+                'current_score_rank': float,
+                'score_change': float
+            }
+        """
+        try:
+            # Get current score rank
+            current_score_rank = await self._get_score_rank(symbol, analysis_date, current_score)
+
+            if current_score_rank is None:
+                return {
+                    'score_degradation_stop_triggered': False,
+                    'initial_score': initial_score,
+                    'current_score': current_score,
+                    'initial_score_rank': initial_score_rank,
+                    'current_score_rank': None,
+                    'score_change': current_score - initial_score
+                }
+
+            # Trigger conditions
+            was_top_20_pct = initial_score_rank > 0.80  # Was in top 20%
+            now_bottom_50_pct = current_score_rank < 0.50  # Now in bottom 50%
+
+            triggered = was_top_20_pct and now_bottom_50_pct
+
+            return {
+                'score_degradation_stop_triggered': triggered,
+                'initial_score': initial_score,
+                'current_score': current_score,
+                'initial_score_rank': round(initial_score_rank, 4),
+                'current_score_rank': round(current_score_rank, 4),
+                'score_change': round(current_score - initial_score, 2)
+            }
+
+        except Exception as e:
+            logger.error(f"{symbol}: Score degradation stop calculation failed - {e}")
+            return {
+                'score_degradation_stop_triggered': False,
+                'initial_score': initial_score,
+                'current_score': current_score,
+                'initial_score_rank': initial_score_rank,
+                'current_score_rank': None,
+                'score_change': None
+            }
+
+    def _determine_stop_type(
+        self,
+        atr_triggered: bool,
+        trailing_triggered: bool,
+        time_triggered: bool,
+        score_triggered: bool
+    ) -> str:
+        """
+        Determine which stop loss was triggered (priority order)
+
+        Priority:
+            1. Trailing Stop (protect profits)
+            2. ATR Stop (volatility-based)
+            3. Score Degradation (fundamental deterioration)
+            4. Time-Based Stop (capital efficiency)
+
+        Returns:
+            'Trailing', 'ATR', 'Score_Degradation', 'Time_Based', or 'None'
+        """
+        if trailing_triggered:
+            return 'Trailing'
+        elif atr_triggered:
+            return 'ATR'
+        elif score_triggered:
+            return 'Score_Degradation'
+        elif time_triggered:
+            return 'Time_Based'
+        else:
+            return 'None'
+
+    async def calculate_multi_tier_stop_loss(
+        self,
+        symbol: str,
+        analysis_date: date,
+        sector: str,
+        current_price: float,
+        current_score: float,
+        # Optional: Only provided for held positions
+        entry_date: Optional[date] = None,
+        entry_price: Optional[float] = None,
+        max_price_since_entry: Optional[float] = None,
+        initial_score: Optional[float] = None,
+        initial_score_rank: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate Multi-Tier Stop Loss (4 layers)
+
+        Phase 3.3 Enhancement: Comprehensive risk management system
+
+        Tiers:
+            1. ATR Stop: Always calculated (volatility-based)
+            2. Trailing Stop: For profitable positions (10%+ gain)
+            3. Time-Based Stop: For long-held losers (60d + -5%)
+            4. Score Degradation: For fundamental deterioration (top 20% -> bottom 50%)
+
+        Args:
+            symbol: Stock symbol
+            analysis_date: Analysis date
+            sector: Stock sector (for ATR multiplier)
+            current_price: Current price
+            current_score: Current final_score
+            entry_date: Optional - Date position opened
+            entry_price: Optional - Entry price
+            max_price_since_entry: Optional - Maximum price since entry
+            initial_score: Optional - Score at entry
+            initial_score_rank: Optional - Score rank at entry (0-1)
+
+        Returns:
+            {
+                'any_stop_triggered': bool,
+                'stop_type': str ('Trailing', 'ATR', 'Score_Degradation', 'Time_Based', 'None'),
+                'atr_stop': Dict,
+                'trailing_stop': Dict or None,
+                'time_stop': Dict or None,
+                'score_stop': Dict or None,
+                'recommendation': str
+            }
+        """
+        try:
+            # Tier 1: ATR Stop (always calculated)
+            atr_stop = await self.calculate_atr_stop_take_profit(symbol, analysis_date, sector)
+            atr_triggered = False
+
+            # Check if ATR stop would be triggered
+            # Note: Actual trigger requires comparison with entry price
+            # For now, we mark as available but not triggered without entry data
+            if entry_price and atr_stop.get('stop_loss_pct'):
+                stop_loss_price = entry_price * (1 + atr_stop['stop_loss_pct'] / 100)
+                atr_triggered = current_price <= stop_loss_price
+
+            # Tier 2-4: Only if position data provided
+            trailing_stop = None
+            trailing_triggered = False
+
+            time_stop = None
+            time_triggered = False
+
+            score_stop = None
+            score_triggered = False
+
+            if entry_price and max_price_since_entry:
+                trailing_stop = await self.calculate_trailing_stop(
+                    symbol, analysis_date, entry_price, max_price_since_entry, current_price
+                )
+                trailing_triggered = trailing_stop.get('trailing_stop_triggered', False)
+
+            if entry_date and entry_price:
+                time_stop = await self.calculate_time_based_stop(
+                    symbol, analysis_date, entry_date, entry_price, current_price
+                )
+                time_triggered = time_stop.get('time_stop_triggered', False)
+
+            if initial_score is not None and initial_score_rank is not None:
+                score_stop = await self.calculate_score_degradation_stop(
+                    symbol, analysis_date, initial_score, initial_score_rank, current_score
+                )
+                score_triggered = score_stop.get('score_degradation_stop_triggered', False)
+
+            # Determine overall status
+            any_stop_triggered = any([
+                atr_triggered,
+                trailing_triggered,
+                time_triggered,
+                score_triggered
+            ])
+
+            stop_type = self._determine_stop_type(
+                atr_triggered, trailing_triggered, time_triggered, score_triggered
+            )
+
+            # Generate recommendation
+            if any_stop_triggered:
+                recommendation = f"SELL: {stop_type} stop triggered"
+            else:
+                recommendation = "HOLD: No stop loss triggered"
+
+            return {
+                'any_stop_triggered': any_stop_triggered,
+                'stop_type': stop_type,
+                'atr_stop': atr_stop,
+                'trailing_stop': trailing_stop,
+                'time_stop': time_stop,
+                'score_stop': score_stop,
+                'recommendation': recommendation
+            }
+
+        except Exception as e:
+            logger.error(f"{symbol}: Multi-tier stop loss calculation failed - {e}")
+            return {
+                'any_stop_triggered': False,
+                'stop_type': 'Error',
+                'atr_stop': None,
+                'trailing_stop': None,
+                'time_stop': None,
+                'score_stop': None,
+                'recommendation': 'ERROR: Calculation failed'
+            }
+
+    # ========================================================================
+    # 5. IV Percentile (US-specific)
     # ========================================================================
 
     async def calculate_iv_percentile(
@@ -339,7 +822,7 @@ class USAgentMetrics:
         SELECT avg_implied_volatility
         FROM us_option_daily_summary
         WHERE symbol = $1
-          AND date >= $2 - INTERVAL '252 days'
+          AND date >= $2::date - INTERVAL '252 days'
           AND date <= $2
           AND avg_implied_volatility IS NOT NULL
         ORDER BY date DESC
@@ -365,7 +848,7 @@ class USAgentMetrics:
             return None
 
     # ========================================================================
-    # 5. Insider Signal (US-specific)
+    # 6. Insider Signal (US-specific)
     # ========================================================================
 
     async def calculate_insider_signal(
@@ -400,7 +883,7 @@ class USAgentMetrics:
             executive_title
         FROM us_insider_transactions
         WHERE symbol = $1
-          AND date >= $2 - INTERVAL '30 days'
+          AND date >= $2::date - INTERVAL '30 days'
           AND date <= $2
         """
 
@@ -443,7 +926,7 @@ class USAgentMetrics:
             return 'NEUTRAL'
 
     # ========================================================================
-    # 6. Action Triggers Generation
+    # 7. Action Triggers Generation
     # ========================================================================
 
     def generate_triggers(
@@ -518,7 +1001,7 @@ class USAgentMetrics:
         }
 
     # ========================================================================
-    # 7. Scenario Probability (Placeholder - High Complexity)
+    # 8. Scenario Probability (Placeholder - High Complexity)
     # ========================================================================
 
     async def calculate_scenario_probability(
@@ -531,16 +1014,17 @@ class USAgentMetrics:
         """
         Calculate scenario probabilities based on historical patterns
 
-        This is a simplified version. Full implementation requires:
-        - Historical pattern matching
-        - Machine learning models
-        - Backtesting validation
+        Phase 3.1 Update:
+            - Apply calibration coefficients to correct prediction bias
+            - bull: calibrated = 0.124 * predicted + 0.233
+            - bear: calibrated = 0.612 * predicted + 0.095
+            - base: derived from (1 - bull - bear) to ensure sum = 100%
 
-        Current Logic (Simplified):
-            - Based on final_score ranges
-            - High score (75+): Higher bullish probability
-            - Medium score (50-75): Higher sideways probability
-            - Low score (<50): Higher bearish probability
+        Current Logic:
+            1. Generate raw probabilities based on final_score ranges
+            2. Apply calibration formulas to bull and bear
+            3. Derive base (sideways) to ensure total = 100%
+            4. Normalize if needed
 
         Args:
             symbol: Stock symbol
@@ -560,23 +1044,54 @@ class USAgentMetrics:
             }
         """
         try:
-            # Simplified probability based on score
+            # Step 1: Raw probability based on score (as decimal 0-1)
             if final_score >= 75:
-                bullish_prob = 55
-                sideways_prob = 30
-                bearish_prob = 15
+                raw_bull = 0.55
+                raw_bear = 0.15
             elif final_score >= 60:
-                bullish_prob = 40
-                sideways_prob = 40
-                bearish_prob = 20
+                raw_bull = 0.40
+                raw_bear = 0.20
             elif final_score >= 45:
-                bullish_prob = 25
-                sideways_prob = 45
-                bearish_prob = 30
+                raw_bull = 0.25
+                raw_bear = 0.30
             else:
-                bullish_prob = 15
-                sideways_prob = 35
-                bearish_prob = 50
+                raw_bull = 0.15
+                raw_bear = 0.50
+
+            # Step 2: Apply calibration formulas
+            # bull: calibrated = slope * predicted + intercept
+            bull_cal = SCENARIO_CALIBRATION['bull']
+            calibrated_bull = bull_cal['slope'] * raw_bull + bull_cal['intercept']
+
+            # bear: calibrated = slope * predicted + intercept
+            bear_cal = SCENARIO_CALIBRATION['bear']
+            calibrated_bear = bear_cal['slope'] * raw_bear + bear_cal['intercept']
+
+            # Step 3: Clamp to valid range [0.05, 0.90]
+            calibrated_bull = max(0.05, min(0.90, calibrated_bull))
+            calibrated_bear = max(0.05, min(0.90, calibrated_bear))
+
+            # Step 4: Derive base (sideways) to ensure sum = 1.0
+            calibrated_base = 1.0 - calibrated_bull - calibrated_bear
+
+            # If base becomes negative or too small, normalize all three
+            if calibrated_base < 0.05:
+                total = calibrated_bull + calibrated_bear + 0.05
+                calibrated_bull = calibrated_bull / total * 0.95
+                calibrated_bear = calibrated_bear / total * 0.95
+                calibrated_base = 0.05
+
+            # Convert to integer percentages
+            bullish_prob = round(calibrated_bull * 100)
+            bearish_prob = round(calibrated_bear * 100)
+            sideways_prob = 100 - bullish_prob - bearish_prob
+
+            # Ensure sideways is non-negative
+            if sideways_prob < 0:
+                sideways_prob = 0
+                total = bullish_prob + bearish_prob
+                bullish_prob = round(bullish_prob / total * 100)
+                bearish_prob = 100 - bullish_prob
 
             # Expected returns (simplified estimates)
             return {
@@ -629,7 +1144,8 @@ class USAgentMetrics:
             Dictionary containing all calculated metrics
         """
         # Parallel execution of independent calculations
-        atr_task = self.calculate_atr_stop_take_profit(symbol, analysis_date)
+        # Phase 3.1: Pass sector for sector-specific ATR multiplier
+        atr_task = self.calculate_atr_stop_take_profit(symbol, analysis_date, sector)
         timing_task = self.calculate_entry_timing_score(symbol, analysis_date, current_score)
         iv_task = self.calculate_iv_percentile(symbol, analysis_date)
         insider_task = self.calculate_insider_signal(symbol, analysis_date)

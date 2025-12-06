@@ -38,17 +38,44 @@ logger = logging.getLogger(__name__)
 # Strategy Weights
 # ========================================================================
 
-# Phase 3 가중치 (장기 예측 최적화)
-# - EM5 (Volume Confirmation 20일): 제외 - 단기 지표
-# - EM7 (Analyst Revisions target price): 제외 - 단기 지표
+# Phase 3.1.5 가중치 (IC 분석 결과 반영)
+# ========================================================================
+# IC Analysis Results (30d return):
+#   EM1: -0.030 (reversed) -> Energy/Basic Materials 섹터에만 적용
+#   EM2: -0.078 (reversed) -> 주석 처리 (전체 계산에서 제외)
+#   EM3: +0.036 (normal)   -> increase weight
+#   EM4: +0.041 (normal)   -> increase weight
+#   EM5: Volume Confirmation -> Basic Materials 섹터에만 적용
+#   EM6: +0.062 (normal)   -> increase weight
+#   EM7: +0.178 (normal)   -> highest IC, increase weight
+#
+# Sector-specific strategies:
+# - EM1: Energy/Basic Materials 섹터에만 적용
+# - EM5: Basic Materials 섹터에만 적용
+# - EM2: 주석 처리 (전체 계산에서 제외)
+# ========================================================================
 STRATEGY_WEIGHTS = {
-    'EM1': 0.15,  # Risk-Adjusted Momentum (126일)
-    'EM2': 0.15,  # Sector Relative Strength (126일 중심)
-    'EM3': 0.20,  # EPS Estimate Revision (비중 증가)
-    'EM4': 0.20,  # Revenue Estimate Revision (비중 증가)
-    'EM6': 0.15,  # Earnings Momentum (비중 증가)
-    'EM8': 0.15   # Long-term Price Momentum (신규, 252일 IBD RS Style)
+    'EM1': 0.05,  # Risk-Adjusted Momentum - Energy/Basic Materials 섹터에만 적용
+    # 'EM2': 0.07,  # Sector Relative Strength - 주석 처리 (전체 계산에서 제외)
+    'EM3': 0.22,  # EPS Estimate Revision - increased (IC +0.036)
+    'EM4': 0.22,  # Revenue Estimate Revision - increased (IC +0.041)
+    'EM5': 0.05,  # Volume Confirmation - Basic Materials 섹터에만 적용
+    'EM6': 0.22,  # Earnings Momentum - increased (IC +0.062)
+    'EM8': 0.24   # Long-term Price Momentum - increased (IC +0.178)
 }
+# Total: 5 + 22 + 22 + 5 + 22 + 24 = 100%
+# (EM1, EM5는 섹터 제한이 있어 해당 섹터가 아니면 자동으로 제외되고 나머지로 100점 계산)
+
+# Sector-specific strategy constraints
+# EM1: Energy/Basic Materials 섹터에만 적용
+EM1_APPLICABLE_SECTORS = ['ENERGY', 'BASIC MATERIALS']
+# EM5: Basic Materials (원자재) 섹터에만 적용
+EM5_APPLICABLE_SECTORS = ['BASIC MATERIALS']
+
+# Phase 3.1.4 역방향 전략 (음의 IC → 점수 역전으로 양의 IC 기대)
+# IC 분석 결과:
+#   - EM1: IC -0.030 → 역방향 적용
+REVERSED_STRATEGIES = ['EM1']
 
 
 class USMomentumFactorV2:
@@ -110,18 +137,45 @@ class USMomentumFactorV2:
                 logger.warning(f"{self.symbol}: No price data available")
                 return {'momentum_score': 50.0, 'strategies': {}}
 
-            # 2. 각 전략별 점수 계산 (Phase 3: EM5, EM7 제외, EM8 신규)
+            # 2. 각 전략별 점수 계산
+            # Phase 3.1.6: 섹터별 전략 적용
+            # - EM1: Energy/Basic Materials 섹터에만 적용
+            # - EM2: 주석 처리 (전체 계산에서 제외)
+            # - EM5: Basic Materials 섹터에만 적용
             strategies = {}
-            strategies['EM1'] = self._calc_em1_risk_adjusted_momentum()
-            strategies['EM2'] = self._calc_em2_sector_relative_strength()
+
+            # EM1: Energy/Basic Materials 섹터에만 적용
+            if self.sector and self.sector.upper() in EM1_APPLICABLE_SECTORS:
+                strategies['EM1'] = self._calc_em1_risk_adjusted_momentum()
+            else:
+                strategies['EM1'] = {'score': None, 'raw': None, 'reason': f'Not applicable sector (only {EM1_APPLICABLE_SECTORS})'}
+
+            # EM2: 주석 처리 - 전체 계산에서 제외
+            # strategies['EM2'] = self._calc_em2_sector_relative_strength()
+
             strategies['EM3'] = self._calc_em3_eps_revision()
             strategies['EM4'] = self._calc_em4_revenue_revision()
-            # EM5 제외: Volume Confirmation (20일) - 단기 지표, 장기 예측에 부적합
+
+            # EM5: Basic Materials (원자재) 섹터에만 적용
+            if self.sector and self.sector.upper() in EM5_APPLICABLE_SECTORS:
+                strategies['EM5'] = self._calc_em5_volume_confirmation()
+            else:
+                strategies['EM5'] = {'score': None, 'raw': None, 'reason': f'Not applicable sector (only {EM5_APPLICABLE_SECTORS})'}
+
             strategies['EM6'] = self._calc_em6_earnings_momentum()
             # EM7 제외: Analyst Revisions (target price) - 단기 지표
-            strategies['EM8'] = self._calc_em8_long_term_momentum()  # 신규: 252일 IBD RS Style
+            strategies['EM8'] = self._calc_em8_long_term_momentum()  # 252일 IBD RS Style
 
-            # 3. 가중 평균 계산
+            # 3. 역방향 전략 적용 (Phase 3.1.4)
+            for strategy_id, result in strategies.items():
+                if result['score'] is not None and strategy_id in REVERSED_STRATEGIES:
+                    original_score = result['score']
+                    reversed_score = 100 - original_score
+                    result['original_score'] = original_score
+                    result['score'] = reversed_score
+                    result['reversed'] = True
+
+            # 4. 가중 평균 계산
             total_weight = 0
             weighted_sum = 0
 

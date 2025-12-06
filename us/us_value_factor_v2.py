@@ -39,6 +39,11 @@ STRATEGY_WEIGHTS = {
     'RV6': 0.10   # Price to Target
 }
 
+# Phase 3.1.4 역방향 전략 (음의 IC → 점수 역전으로 양의 IC 기대)
+# IC 분석 결과:
+#   - RV2: IC -0.139 → 역방향 적용
+REVERSED_STRATEGIES = ['RV2']
+
 # 섹터별 PEG 기준 (성장주 섹터는 기준 완화)
 SECTOR_PEG_THRESHOLDS = {
     'TECHNOLOGY': {'excellent': 1.3, 'good': 2.0, 'fair': 3.0},
@@ -50,6 +55,9 @@ SECTOR_PEG_THRESHOLDS = {
 
 # Rule of 40 적용 섹터
 RULE_OF_40_SECTORS = ['TECHNOLOGY', 'COMMUNICATION SERVICES']
+
+# RV5 FCF Yield 적용 섹터 (Utilities / Financial Services 섹터에만 적용)
+RV5_APPLICABLE_SECTORS = ['UTILITIES', 'FINANCIAL SERVICES']
 
 
 class USValueFactorV2:
@@ -93,15 +101,32 @@ class USValueFactorV2:
                 return {'value_score': 50.0, 'strategies': {}}
 
             # 2. 각 전략별 점수 계산
+            # Phase 3.1.6: 섹터별 전략 적용
+            # - RV5: Utilities/Financial Services 섹터에만 적용
             strategies = {}
             strategies['RV1'] = self._calc_rv1_peg()
             strategies['RV2'] = self._calc_rv2_forward_pe_relative()
             strategies['RV3'] = self._calc_rv3_ev_rev_growth()
             strategies['RV4'] = self._calc_rv4_rule_of_40()
-            strategies['RV5'] = self._calc_rv5_fcf_yield()
+
+            # RV5: Utilities/Financial Services 섹터에만 적용
+            if self.sector and self.sector.upper() in RV5_APPLICABLE_SECTORS:
+                strategies['RV5'] = self._calc_rv5_fcf_yield()
+            else:
+                strategies['RV5'] = {'score': None, 'raw': None, 'reason': f'Not applicable sector (only {RV5_APPLICABLE_SECTORS})'}
+
             strategies['RV6'] = self._calc_rv6_price_to_target()
 
-            # 3. 가중 평균 계산
+            # 3. 역방향 전략 적용 (Phase 3.1.4)
+            for strategy_id, result in strategies.items():
+                if result['score'] is not None and strategy_id in REVERSED_STRATEGIES:
+                    original_score = result['score']
+                    reversed_score = 100 - original_score
+                    result['original_score'] = original_score
+                    result['score'] = reversed_score
+                    result['reversed'] = True
+
+            # 4. 가중 평균 계산
             total_weight = 0
             weighted_sum = 0
 

@@ -708,12 +708,8 @@ quality_score,"DECIMAL(5,1)",품질 팩터 점수 (0-100)
 momentum_score,"DECIMAL(5,1)",모멘텀 팩터 점수 (0-100)
 growth_score,"DECIMAL(5,1)",성장 팩터 점수 (0-100)
 confidence_score,"DECIMAL(5,1)",신뢰도 점수 (%)
-expected_range_3m_min,INTEGER,향후 3개월 예상 가격 하한 (원)
-expected_range_3m_max,INTEGER,향후 3개월 예상 가격 상한 (원)
-expected_range_1y_min,INTEGER,향후 1년 예상 가격 하한 (원)
-expected_range_1y_max,INTEGER,향후 1년 예상 가격 상한 (원)
-var_95,"DECIMAL(6,2)","일일 VaR 95% (음수, %)"
-cvar_95,"DECIMAL(6,2)",
+var_95,"DECIMAL(6,2)","일일 VaR 95% (음수, %) 리스크 예산 배분, 손실 한도 설정"
+cvar_95,"DECIMAL(6,2)","일일 CVaR 95% (음수, %) 꼬리위험 관리, VaR보다 보수적 리스크 측정"
 value_momentum,"DECIMAL(5,1)",가치 팩터 모멘텀 (전월 대비 변화)
 quality_momentum,"DECIMAL(5,1)",품질 팩터 모멘텀 (전월 대비 변화)
 momentum_momentum,"DECIMAL(5,1)",모멘텀 팩터 모멘텀 (전월 대비 변화)
@@ -727,40 +723,47 @@ risk_profile_text,TEXT,리스크 프로파일 해석
 risk_recommendation,TEXT,투자자 적합성 추천
 time_series_text,TEXT,시계열 추세 해석
 signal_overall,TEXT,종합 평가 해석
-buy_signals_count,INTEGER,매수 신호 개수
-neutral_signals_count,INTEGER,중립 신호 개수
-sell_signals_count,INTEGER,매도 신호 개수
 market_state,VARCHAR(100),시장 상태 분류 (시장-유동성-섹터-변동성 등 19개 차원)
-buy_signal_1,TEXT,매수 신호 내용 1
-buy_signal_2,TEXT,매수 신호 내용 2
-buy_signal_3,TEXT,매수 신호 내용 3
-neutral_signal_1,TEXT,중립 신호 내용 1
-neutral_signal_2,TEXT,중립 신호 내용 2
-neutral_signal_3,TEXT,중립 신호 내용 3
-sell_signal_1,TEXT,매도 신호 내용 1
-sell_signal_2,TEXT,매도 신호 내용 2
-sell_signal_3,TEXT,매도 신호 내용 3
-support_1,"DECIMAL(21,2)",지지선 1 (원)
-support_2,"DECIMAL(21,2)",지지선 2 (원)
-resistance_1,"DECIMAL(21,2)",저항선 1 (원)
-resistance_2,"DECIMAL(21,2)",저항선 2 (원)
-supertrend_value,"DECIMAL(21,2)",SuperTrend 기준 가격 (원)
-trend,TEXT,SuperTrend 추세 방향 (상승/하락/중립)
-signal,TEXT,SuperTrend 매매 신호 (매수/매도/보유)
 rs_value,"DECIMAL(21,2)","상대강도(RS) 값: 종목 수익률 - 시장 수익률 (%, 20일)"
 rs_rank,TEXT,상대강도 등급 (매우강함/강함/중립/약함/매우약함)
 factor_combination_bonus,INTEGER,팩터 조합 보너스: 검증된 승리 패턴 (+30~-20)
-score_change_1m,"DECIMAL(5,1)",1개월 전 대비 점수 변화 (점)
-score_change_2m,"DECIMAL(5,1)",2개월 전 대비 점수 변화 (점)
 sector_rotation_score,INTEGER,섹터 로테이션 점수 (0-100): 업종 모멘텀 및 상대 강도
 sector_momentum,"DECIMAL(5,2)","섹터 모멘텀 (%, 최근 30일 수익률)"
 sector_rank,INTEGER,섹터 순위 (전체 섹터 중)
 sector_percentile,"DECIMAL(5,2)",섹터 백분위수 (상위 X%)
-value_v2_detail,JSONB,
-quality_v2_detail,JSONB,
-momentum_v2_detail,JSONB,
-growth_v2_detail,JSONB,
-interaction_score,"DECIMAL(5,2)",
-conviction_score,"DECIMAL(5,2)",
+value_v2_detail,JSONB,Value 팩터 개별 전략 점수 상세
+quality_v2_detail,JSONB,Quality 팩터 개별 전략 점수 상세
+momentum_v2_detail,JSONB,Momentum 팩터 개별 전략 점수 상세
+growth_v2_detail,JSONB,Growth 팩터 개별 전략 점수 상세
+interaction_score,"DECIMAL(5,2)",Factor Interaction 점수 (0-100): 4개 팩터 간 비선형 상호작용 가중합
+conviction_score,"DECIMAL(5,2)",확신도 점수 (0-100): 4개 팩터 점수의 일치도. 표준편차가 낮을수록(팩터들이 동일 방향을 가리킬수록) 높은 점수. 매수/매도 신호의 신뢰도 판단에 활용
+entry_timing_score,"DECIMAL(5,1)",지금 사기 좋은가?
+score_trend_2w,"DECIMAL(20,2)",final_score 추세 (상승/하락/유지)
+price_position_52w,"DECIMAL(20,2)",52주 고저 대비 위치
+stop_loss_pct,"DECIMAL(20,2)",손절 기준 % (ATR 기반)
+take_profit_pct,"DECIMAL(20,2)",익절 기준 % (리스크리워드 기반)
+risk_reward_ratio,"DECIMAL(4,2)",기대 이익/손실 비율
+position_size_pct,"DECIMAL(4,2)",권장 비중 % (변동성 기반)
+atr_pct,"DECIMAL(20,2)",포지션 사이징 및 리스크 관리에 활용
+scenario_bullish_prob,INTEGER,강세 확률 %
+scenario_sideways_prob,INTEGER,횡보 확률 %
+scenario_bearish_prob,INTEGER,약세 확률 %
+scenario_bullish_return,VARCHAR(20),강세 예상 수익률
+scenario_sideways_return,VARCHAR(20),횡보 예상 수익률
+scenario_bearish_return,VARCHAR(20),약세 예상 수익률
+scenario_sample_count,INTEGER,시나리오 분석에 사용된 과거 샘플(기간) 수 - Monte Carlo 시뮬레이션 기반 기대수익률 계산 시 참조된 이력 데이터 개수
+buy_triggers,JSONB,매수 실행 조건들
+sell_triggers,JSONB,매도 실행 조건들
+hold_triggers,JSONB,보유 실행 조건들
+iv_percentile,INTEGER,1년치 IV 백분위
+insider_signal,VARCHAR(20),30일치 내부자 거래 집계
+outlier_risk_score,"DECIMAL(5,2)","ORS (Outlier Risk Score, 0-100): 이상치 위험 점수. Penny Stock(저가주<$5) +  Volume(유동성<100K) + Volatility(변동성>100%) + Market Cap(소형주<$300M) 각 25점 합산"
+risk_flag,VARCHAR(20),"ORS 기반 위험 등급 (EXTREME_RISK ≥80점, HIGH_RISK ≥60점, MODERATE_RISK ≥40점, NORMAL <40점). 포지션 사이즈 조정에 활용"
+weight_growth,"DECIMAL(5,2)",최종 적용 Growth 가중치 (%): 시장 레짐 기본 가중치 + 거래소별 조정(NASDAQ +5%) + 섹터별 조정(Healthcare +10% 등) 후 정규화된 값
+weight_momentum,"DECIMAL(5,2)",최종 적용 Momentum 가중치 (%): 시장 레짐 기본 가중치 + 거래소별 조정(NASDAQ +5%) + 섹터별 조정(Healthcare +10% 등) 후 정규화된 값
+weight_quality,"DECIMAL(5,2)",최종 적용 Quality 가중치 (%): 시장 레짐 기본 가중치 + 거래소별 조정(NASDAQ +5%) + 섹터별 조정(Healthcare +10% 등) 후 정규화된 값
+weight_value,"DECIMAL(5,2)",최종 적용 Value 가중치 (%): 시장 레짐 기본 가중치 + 거래소별 조정(NASDAQ +5%) + 섹터별 조정(Healthcare +10% 등) 후 정규화된 값
+sharpe_ratio,"DECIMAL(8,4)",
+sortino_ratio,"DECIMAL(8,4)",
+calmar_ratio,"DECIMAL(8,4)",
 created_at,TIMESTAMP,
-updated_at,TIMESTAMP,

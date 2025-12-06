@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Strategy Weights
 # ========================================================================
 
+# 일반 섹터 가중치
 STRATEGY_WEIGHTS = {
     'MQ1': 0.20,  # Gross Margin
     'MQ2': 0.20,  # ROIC
@@ -38,6 +39,23 @@ STRATEGY_WEIGHTS = {
     'MQ5': 0.15,  # Balance Sheet
     'MQ6': 0.15   # Margin Trend
 }
+
+# Healthcare 섹터 전용 가중치 (HC1~HC4 Healthcare 특화 전략 포함)
+# 기존 MQ1~MQ6 가중치 축소 + HC1~HC4 40% 추가 = 합계 100%
+HEALTHCARE_STRATEGY_WEIGHTS = {
+    'MQ1': 0.12,  # Gross Margin (20% → 12%)
+    'MQ2': 0.12,  # ROIC (20% → 12%)
+    'MQ3': 0.08,  # Operating Leverage (15% → 8%)
+    'MQ4': 0.10,  # Earnings Quality (15% → 10%)
+    'MQ5': 0.10,  # Balance Sheet (15% → 10%)
+    'MQ6': 0.08,  # Margin Trend (15% → 8%)
+    # Healthcare 특화 전략 (40%)
+    'HC1': 0.10,  # Analyst Consensus Score
+    'HC2': 0.10,  # EPS Revision Momentum
+    'HC3': 0.10,  # R&D Intensity Score
+    'HC4': 0.10   # Cash Runway Score
+}
+# Total: 12+12+8+10+10+8+10+10+10+10 = 100%
 
 # 섹터별 Gross Margin 기준 (구조적으로 마진이 다름)
 SECTOR_GROSS_MARGIN_THRESHOLDS = {
@@ -111,19 +129,29 @@ class USQualityFactorV2:
             strategies['MQ5'] = self._calc_mq5_balance_sheet()
             strategies['MQ6'] = self._calc_mq6_margin_trend()
 
-            # 3. 가중 평균 계산
+            # 3. Healthcare 섹터일 때 HC1~HC4 추가 계산
+            is_healthcare = self.sector == 'HEALTHCARE'
+            if is_healthcare:
+                await self._load_healthcare_data()
+                strategies['HC1'] = self._calc_hc1_analyst_consensus()
+                strategies['HC2'] = self._calc_hc2_eps_revision_momentum()
+                strategies['HC3'] = self._calc_hc3_rd_intensity()
+                strategies['HC4'] = self._calc_hc4_cash_runway()
+
+            # 4. 가중 평균 계산 (섹터에 따라 다른 가중치 사용)
+            weights = HEALTHCARE_STRATEGY_WEIGHTS if is_healthcare else STRATEGY_WEIGHTS
             total_weight = 0
             weighted_sum = 0
 
             for strategy_id, result in strategies.items():
-                if result['score'] is not None:
-                    weight = STRATEGY_WEIGHTS[strategy_id]
+                if result['score'] is not None and strategy_id in weights:
+                    weight = weights[strategy_id]
                     weighted_sum += result['score'] * weight
                     total_weight += weight
 
             quality_score = weighted_sum / total_weight if total_weight > 0 else 50.0
 
-            logger.info(f"{self.symbol}: Quality Score = {quality_score:.1f}")
+            logger.info(f"{self.symbol}: Quality Score = {quality_score:.1f} (Healthcare: {is_healthcare})")
 
             return {
                 'quality_score': round(quality_score, 1),
@@ -203,8 +231,8 @@ class USQualityFactorV2:
             total_current_liabilities,
             long_term_debt,
             short_term_debt,
-            cash_and_cash_equivalents,
-            total_debt
+            cash_and_cash_equivalents_at_carrying_value,
+            short_long_term_debt_total
         FROM us_balance_sheet
         WHERE symbol = $1
         ORDER BY fiscal_date_ending DESC
@@ -224,8 +252,8 @@ class USQualityFactorV2:
                     'current_liabilities': self._to_float(row['total_current_liabilities']),
                     'long_term_debt': self._to_float(row['long_term_debt']),
                     'short_term_debt': self._to_float(row['short_term_debt']),
-                    'cash': self._to_float(row['cash_and_cash_equivalents']),
-                    'total_debt': self._to_float(row['total_debt'])
+                    'cash': self._to_float(row['cash_and_cash_equivalents_at_carrying_value']),
+                    'total_debt': self._to_float(row['short_long_term_debt_total'])
                 })
 
         except Exception as e:
@@ -238,7 +266,7 @@ class USQualityFactorV2:
         SELECT
             operating_cashflow,
             net_income,
-            depreciation_and_amortization,
+            depreciation_depletion_and_amortization,
             capital_expenditures
         FROM us_cash_flow
         WHERE symbol = $1
@@ -253,7 +281,7 @@ class USQualityFactorV2:
                 # TTM 합계
                 total_ocf = sum(self._to_float(r['operating_cashflow']) or 0 for r in result)
                 total_ni = sum(self._to_float(r['net_income']) or 0 for r in result)
-                total_da = sum(self._to_float(r['depreciation_and_amortization']) or 0 for r in result)
+                total_da = sum(self._to_float(r['depreciation_depletion_and_amortization']) or 0 for r in result)
                 total_capex = sum(abs(self._to_float(r['capital_expenditures']) or 0) for r in result)
 
                 self.stock_data.update({
@@ -693,6 +721,357 @@ class USQualityFactorV2:
             return float(value)
         except:
             return None
+
+    # ====================================================================
+    # Healthcare 특화 전략 (HC1~HC4)
+    # ====================================================================
+
+    async def _load_healthcare_data(self):
+        """Healthcare 특화 데이터 로드 (Analyst, EPS Estimates, R&D, Cash)"""
+
+        # 1. Analyst Rating 데이터 (us_stock_basic)
+        analyst_query = """
+        SELECT
+            analysttargetprice,
+            analystratingstrongbuy,
+            analystratingbuy,
+            analystratinghold,
+            analystratingsell,
+            analystratingstrongsell
+        FROM us_stock_basic
+        WHERE symbol = $1
+        """
+
+        # 2. EPS Estimates 데이터 (us_earnings_estimates)
+        eps_query = """
+        SELECT
+            eps_estimate_average,
+            eps_estimate_average_7_days_ago,
+            eps_estimate_average_30_days_ago,
+            eps_estimate_revision_up_trailing_7_days,
+            eps_estimate_revision_down_trailing_7_days
+        FROM us_earnings_estimates
+        WHERE symbol = $1 AND horizon = 'next fiscal quarter'
+        ORDER BY estimate_date DESC
+        LIMIT 1
+        """
+
+        # 3. R&D 데이터 (us_income_statement)
+        rd_query = """
+        SELECT
+            research_and_development,
+            total_revenue
+        FROM us_income_statement
+        WHERE symbol = $1 AND research_and_development IS NOT NULL
+        ORDER BY fiscal_date_ending DESC
+        LIMIT 4
+        """
+
+        # 4. Cash Runway 데이터 (us_balance_sheet + us_cash_flow)
+        # cash는 이미 _load_balance_sheet_data에서 로드됨
+        # operating_cashflow는 이미 _load_cash_flow_data에서 로드됨
+
+        try:
+            # Analyst 데이터
+            analyst_result = await self.db.execute_query(analyst_query, self.symbol)
+            if analyst_result and analyst_result[0]:
+                row = analyst_result[0]
+                self.stock_data['analyst'] = {
+                    'target_price': self._to_float(row['analysttargetprice']),
+                    'strong_buy': row['analystratingstrongbuy'] or 0,
+                    'buy': row['analystratingbuy'] or 0,
+                    'hold': row['analystratinghold'] or 0,
+                    'sell': row['analystratingsell'] or 0,
+                    'strong_sell': row['analystratingstrongsell'] or 0
+                }
+
+            # EPS Estimates 데이터
+            eps_result = await self.db.execute_query(eps_query, self.symbol)
+            if eps_result and eps_result[0]:
+                row = eps_result[0]
+                self.stock_data['eps_estimates'] = {
+                    'current': self._to_float(row['eps_estimate_average']),
+                    '7d_ago': self._to_float(row['eps_estimate_average_7_days_ago']),
+                    '30d_ago': self._to_float(row['eps_estimate_average_30_days_ago']),
+                    'revision_up_7d': row['eps_estimate_revision_up_trailing_7_days'] or 0,
+                    'revision_down_7d': row['eps_estimate_revision_down_trailing_7_days'] or 0
+                }
+
+            # R&D 데이터 (TTM 합계)
+            rd_result = await self.db.execute_query(rd_query, self.symbol)
+            if rd_result:
+                rd_total = sum(self._to_float(r['research_and_development']) or 0 for r in rd_result)
+                rev_total = sum(self._to_float(r['total_revenue']) or 0 for r in rd_result)
+                self.stock_data['rd'] = {
+                    'rd_ttm': rd_total,
+                    'revenue_ttm': rev_total,
+                    'rd_intensity': rd_total / rev_total if rev_total > 0 else None
+                }
+
+        except Exception as e:
+            logger.warning(f"{self.symbol}: Healthcare data load failed - {e}")
+
+    def _calc_hc1_analyst_consensus(self) -> Dict:
+        """HC1: Analyst Consensus Score
+
+        공식: (StrongBuy×2 + Buy×1.5 + Hold×1 + Sell×0.5 + StrongSell×0) / Total Ratings
+        점수 범위: 0-100
+
+        해석:
+        - 2.0 = 모두 Strong Buy → 100점
+        - 1.5 = 모두 Buy → 85점
+        - 1.0 = 모두 Hold → 50점
+        - 0.5 = 모두 Sell → 25점
+        - 0.0 = 모두 Strong Sell → 0점
+        """
+        analyst = self.stock_data.get('analyst')
+        if not analyst:
+            return {'score': None, 'raw': None, 'reason': 'No analyst data'}
+
+        strong_buy = analyst['strong_buy']
+        buy = analyst['buy']
+        hold = analyst['hold']
+        sell = analyst['sell']
+        strong_sell = analyst['strong_sell']
+
+        total = strong_buy + buy + hold + sell + strong_sell
+        if total == 0:
+            return {'score': None, 'raw': None, 'reason': 'No analyst ratings'}
+
+        # 가중 평균 계산 (0~2 범위)
+        weighted_sum = (strong_buy * 2.0 + buy * 1.5 + hold * 1.0 +
+                        sell * 0.5 + strong_sell * 0.0)
+        consensus = weighted_sum / total
+
+        # 점수 변환 (0~2 → 0~100)
+        score = consensus / 2.0 * 100
+
+        return {
+            'score': min(100, max(0, score)),
+            'raw': consensus,
+            'strong_buy': strong_buy,
+            'buy': buy,
+            'hold': hold,
+            'sell': sell,
+            'strong_sell': strong_sell,
+            'total_ratings': total
+        }
+
+    def _calc_hc2_eps_revision_momentum(self) -> Dict:
+        """HC2: EPS Revision Momentum
+
+        공식: (EPS_now - EPS_30d_ago) / |EPS_30d_ago| × 100
+        + 추가 보정: 7일간 상향/하향 수정 건수
+
+        점수 범위: 0-100
+        """
+        eps_data = self.stock_data.get('eps_estimates')
+        if not eps_data:
+            return {'score': None, 'raw': None, 'reason': 'No EPS estimates data'}
+
+        eps_current = eps_data['current']
+        eps_30d_ago = eps_data['30d_ago']
+        revision_up = eps_data['revision_up_7d']
+        revision_down = eps_data['revision_down_7d']
+
+        # EPS 변화율 계산
+        if eps_current is None or eps_30d_ago is None or eps_30d_ago == 0:
+            # Revision 데이터만으로 점수 계산
+            if revision_up == 0 and revision_down == 0:
+                return {'score': 50.0, 'raw': None, 'reason': 'No revision data', 'source': 'neutral'}
+
+            # Net revision
+            # revision 값이 매우 큰 경우 정규화 (천 단위 이상이면 /1000)
+            if revision_up > 1000:
+                revision_up = revision_up / 1000
+            if revision_down > 1000:
+                revision_down = revision_down / 1000
+
+            net_revision = revision_up - revision_down
+
+            if net_revision >= 3:
+                score = 85
+            elif net_revision >= 1:
+                score = 65 + net_revision * 10
+            elif net_revision >= 0:
+                score = 50 + net_revision * 15
+            elif net_revision >= -1:
+                score = 35 + (net_revision + 1) * 15
+            else:
+                score = max(10, 35 + net_revision * 10)
+
+            return {
+                'score': min(100, max(0, score)),
+                'raw': net_revision,
+                'revision_up': revision_up,
+                'revision_down': revision_down,
+                'source': 'revision_only'
+            }
+
+        # EPS 변화율 계산
+        eps_change = (eps_current - eps_30d_ago) / abs(eps_30d_ago)
+
+        # 변화율 기반 점수 (70% 비중)
+        if eps_change >= 0.10:
+            change_score = 90 + min(10, (eps_change - 0.10) / 0.05 * 10)
+        elif eps_change >= 0.05:
+            change_score = 75 + (eps_change - 0.05) / 0.05 * 15
+        elif eps_change >= 0.02:
+            change_score = 60 + (eps_change - 0.02) / 0.03 * 15
+        elif eps_change >= 0:
+            change_score = 50 + eps_change / 0.02 * 10
+        elif eps_change >= -0.02:
+            change_score = 40 + (eps_change + 0.02) / 0.02 * 10
+        elif eps_change >= -0.05:
+            change_score = 25 + (eps_change + 0.05) / 0.03 * 15
+        else:
+            change_score = max(10, 25 + (eps_change + 0.05) * 150)
+
+        # Revision 방향 보정 (30% 비중)
+        if revision_up > 1000:
+            revision_up = revision_up / 1000
+        if revision_down > 1000:
+            revision_down = revision_down / 1000
+
+        net_revision = revision_up - revision_down
+        if net_revision >= 2:
+            revision_score = 80
+        elif net_revision >= 0:
+            revision_score = 50 + net_revision * 15
+        else:
+            revision_score = max(20, 50 + net_revision * 15)
+
+        # 가중 평균
+        score = change_score * 0.7 + revision_score * 0.3
+
+        return {
+            'score': min(100, max(0, score)),
+            'raw': eps_change,
+            'eps_current': eps_current,
+            'eps_30d_ago': eps_30d_ago,
+            'revision_up': revision_up,
+            'revision_down': revision_down
+        }
+
+    def _calc_hc3_rd_intensity(self) -> Dict:
+        """HC3: R&D Intensity Score
+
+        공식: R&D / Revenue (TTM)
+
+        Healthcare 기준:
+        - >30%: 매우 높은 R&D 투자 (Biotech 수준) → 높은 점수
+        - 20-30%: 높은 R&D 투자 (대형 제약사 수준)
+        - 10-20%: 보통 수준
+        - <10%: 낮은 R&D 투자 (비제약 Healthcare)
+
+        점수 범위: 0-100
+        """
+        rd_data = self.stock_data.get('rd')
+        if not rd_data or rd_data['rd_intensity'] is None:
+            return {'score': None, 'raw': None, 'reason': 'No R&D data'}
+
+        rd_intensity = rd_data['rd_intensity']
+
+        # Healthcare R&D Intensity 기준 점수
+        if rd_intensity >= 0.50:  # 50%+ (고집중 Biotech)
+            score = 95
+        elif rd_intensity >= 0.35:  # 35-50%
+            score = 85 + (rd_intensity - 0.35) / 0.15 * 10
+        elif rd_intensity >= 0.25:  # 25-35% (대형 제약사 수준)
+            score = 75 + (rd_intensity - 0.25) / 0.10 * 10
+        elif rd_intensity >= 0.15:  # 15-25%
+            score = 60 + (rd_intensity - 0.15) / 0.10 * 15
+        elif rd_intensity >= 0.10:  # 10-15%
+            score = 50 + (rd_intensity - 0.10) / 0.05 * 10
+        elif rd_intensity >= 0.05:  # 5-10%
+            score = 35 + (rd_intensity - 0.05) / 0.05 * 15
+        else:  # <5%
+            score = max(20, rd_intensity / 0.05 * 35)
+
+        return {
+            'score': min(100, max(0, score)),
+            'raw': rd_intensity,
+            'rd_ttm': rd_data['rd_ttm'],
+            'revenue_ttm': rd_data['revenue_ttm']
+        }
+
+    def _calc_hc4_cash_runway(self) -> Dict:
+        """HC4: Cash Runway Score
+
+        공식: Cash / |Quarterly Burn Rate| (분기 수)
+
+        적자 기업 (Operating Cashflow < 0):
+        - 12분기+ (3년+): 안전 → 높은 점수
+        - 8-12분기 (2-3년): 양호
+        - 4-8분기 (1-2년): 주의
+        - <4분기 (1년 미만): 위험
+
+        흑자 기업 (Operating Cashflow >= 0):
+        - Cash Runway 불필요, 자동 높은 점수
+
+        점수 범위: 0-100
+        """
+        cash = self.stock_data.get('cash') or 0
+        ocf_ttm = self.stock_data.get('operating_cashflow_ttm')
+
+        if ocf_ttm is None:
+            return {'score': None, 'raw': None, 'reason': 'No cashflow data'}
+
+        # 흑자 기업 (OCF >= 0)
+        if ocf_ttm >= 0:
+            # Cash 보유량에 따른 추가 점수
+            if cash > 0:
+                # Cash / Revenue 비율로 추가 평가
+                revenue = self.stock_data.get('revenue') or self.stock_data.get('rd', {}).get('revenue_ttm') or 1
+                cash_ratio = cash / revenue if revenue > 0 else 0
+
+                if cash_ratio >= 0.3:  # 30%+ Cash
+                    score = 95
+                elif cash_ratio >= 0.15:
+                    score = 85 + (cash_ratio - 0.15) / 0.15 * 10
+                else:
+                    score = 75 + cash_ratio / 0.15 * 10
+            else:
+                score = 70
+
+            return {
+                'score': min(100, max(0, score)),
+                'raw': 'positive_cashflow',
+                'cash': cash,
+                'operating_cashflow_ttm': ocf_ttm,
+                'status': 'profitable'
+            }
+
+        # 적자 기업 (OCF < 0)
+        quarterly_burn = abs(ocf_ttm) / 4  # TTM을 분기로 환산
+        if quarterly_burn <= 0:
+            return {'score': 50.0, 'raw': None, 'reason': 'Invalid burn rate'}
+
+        # Cash Runway (분기 수)
+        runway_quarters = cash / quarterly_burn
+
+        # Runway 기반 점수
+        if runway_quarters >= 16:  # 4년+
+            score = 90 + min(10, (runway_quarters - 16) / 8 * 10)
+        elif runway_quarters >= 12:  # 3-4년
+            score = 80 + (runway_quarters - 12) / 4 * 10
+        elif runway_quarters >= 8:  # 2-3년
+            score = 65 + (runway_quarters - 8) / 4 * 15
+        elif runway_quarters >= 4:  # 1-2년
+            score = 45 + (runway_quarters - 4) / 4 * 20
+        elif runway_quarters >= 2:  # 6개월-1년
+            score = 25 + (runway_quarters - 2) / 2 * 20
+        else:  # 6개월 미만
+            score = max(5, runway_quarters / 2 * 25)
+
+        return {
+            'score': min(100, max(0, score)),
+            'raw': runway_quarters,
+            'cash': cash,
+            'quarterly_burn': quarterly_burn,
+            'operating_cashflow_ttm': ocf_ttm,
+            'status': 'cash_burning'
+        }
 
 
 # ========================================================================

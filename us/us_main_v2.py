@@ -33,6 +33,13 @@ from us_growth_factor_v2 import calculate_growth_score
 from us_factor_interactions import USFactorInteractions
 from us_agent_metrics import USAgentMetrics
 
+# Phase 3.1 imports
+from us_outlier_risk import USOutlierRisk
+from us_exchange_optimizer import USExchangeOptimizer
+from us_sector_dynamic_weights import USSectorDynamicWeights
+from us_healthcare_optimizer import USHealthcareOptimizer
+from us_nasdaq_optimizer import USNASDAQOptimizer
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -58,13 +65,13 @@ GRADE_THRESHOLDS = {
 
 # 등급별 투자 의견
 GRADE_OPINION = {
-    'A+': '적극 매수',
+    'A+': '강력 매수',
     'A':  '매수',
-    'B+': '관심',
+    'B+': '매수 고려',
     'B':  '중립',
-    'C':  '관망',
-    'D':  '주의',
-    'F':  '매도'
+    'C':  '매도 고려',
+    'D':  '매도',
+    'F':  '강력 매도'
 }
 
 
@@ -74,6 +81,13 @@ class USQuantSystemV2:
     def __init__(self, db_manager: AsyncDatabaseManager):
         self.db = db_manager
         self.sector_benchmarks = USSectorBenchmarks(db_manager)
+
+        # Phase 3.1 modules
+        self.outlier_risk = USOutlierRisk()
+        self.exchange_optimizer = USExchangeOptimizer()
+        self.sector_weights = USSectorDynamicWeights()
+        self.healthcare_optimizer = USHealthcareOptimizer()
+        self.nasdaq_optimizer = USNASDAQOptimizer()
 
         # Cache
         self.current_regime = None
@@ -198,7 +212,7 @@ class USQuantSystemV2:
         return self.sector_cache[sector]
 
     async def _analyze_stock(self, symbol: str, analysis_date: date) -> Optional[Dict]:
-        """개별 종목 분석"""
+        """개별 종목 분석 (Phase 3.1 통합)"""
 
         # 종목 기본 정보
         stock_info = await self._get_stock_info(symbol)
@@ -206,22 +220,24 @@ class USQuantSystemV2:
             return None
 
         sector = stock_info.get('sector')
+        exchange = stock_info.get('exchange', 'NYSE')  # Phase 3.1
         if not sector:
             return None
 
         # 섹터 벤치마크 로드
         benchmarks = await self._get_sector_benchmarks(sector)
 
-        # 4개 Factor 점수 + VaR/CVaR + RS Value 계산 (병렬 처리)
+        # 4개 Factor 점수 + VaR/CVaR + RS Value + ORS 계산 (병렬 처리)
         value_task = calculate_value_score(symbol, self.db, benchmarks, analysis_date)
         quality_task = calculate_quality_score(symbol, self.db, benchmarks, analysis_date)
         momentum_task = calculate_momentum_score(symbol, self.db, benchmarks, analysis_date)
         growth_task = calculate_growth_score(symbol, self.db, benchmarks, analysis_date)
         var_cvar_task = self._calculate_var_cvar(symbol, analysis_date)
         rs_value_task = self._calculate_rs_value(symbol, analysis_date)
+        ors_task = self._calculate_ors(symbol, analysis_date)  # Phase 3.1
 
-        value_result, quality_result, momentum_result, growth_result, var_cvar_result, rs_value = await asyncio.gather(
-            value_task, quality_task, momentum_task, growth_task, var_cvar_task, rs_value_task
+        value_result, quality_result, momentum_result, growth_result, var_cvar_result, rs_value, ors_result = await asyncio.gather(
+            value_task, quality_task, momentum_task, growth_task, var_cvar_task, rs_value_task, ors_task
         )
 
         # 개별 점수
@@ -230,12 +246,73 @@ class USQuantSystemV2:
         momentum_score = momentum_result['momentum_score']
         growth_score = growth_result['growth_score']
 
-        # Base score (기존 가중합)
+        # Phase 3.1: ORS 결과
+        outlier_risk_score = ors_result.get('ors', 0)
+        risk_flag = ors_result.get('risk_flag', 'NORMAL')
+
+        # Phase 3.3: Healthcare 최적화 (Growth-centric + Sub-sector differentiation)
+        if sector == 'Healthcare':
+            # Healthcare 서브섹터 분류
+            subsector = await self.healthcare_optimizer.classify_healthcare_subsector(
+                stock_info, symbol, self.db, analysis_date
+            )
+
+            # Healthcare 전용 가중치 적용 (0-1 범위 -> 0-100 스케일 변환)
+            healthcare_weights = self.healthcare_optimizer.get_healthcare_weights(subsector)
+            # healthcare_weights = {'growth': 0.60, 'quality': 0.25, ...} sum = 1.00
+            adjusted_weights = {
+                'growth': healthcare_weights['growth'] * 100,
+                'momentum': healthcare_weights['momentum'] * 100,
+                'quality': healthcare_weights['quality'] * 100,
+                'value': healthcare_weights['value'] * 100
+            }  # Sum = 100 (100-point scale maintained)
+
+            # Validation: Weight sum must be 100
+            weight_sum = sum(adjusted_weights.values())
+            if abs(weight_sum - 100.0) > 0.01:
+                logger.warning(
+                    f"[Healthcare] Weight sum != 100: {weight_sum:.2f} for {symbol} "
+                    f"(subsector: {subsector})"
+                )
+
+        # Phase 3.3: NASDAQ 최적화 (Momentum 축소 + Quality 강화 + 섹터별 차별화)
+        elif exchange == 'NASDAQ':
+            # NASDAQ 섹터별 가중치 적용
+            # Technology/Healthcare는 Momentum 10%, 나머지는 기본 가중치
+            nasdaq_weights = self.nasdaq_optimizer.get_nasdaq_sector_weights(sector)
+            # nasdaq_weights = {'growth': 0.50, 'quality': 0.25, ...} sum = 1.00
+
+            adjusted_weights = {
+                'growth': nasdaq_weights['growth'] * 100,
+                'momentum': nasdaq_weights['momentum'] * 100,
+                'quality': nasdaq_weights['quality'] * 100,
+                'value': nasdaq_weights['value'] * 100
+            }  # Sum = 100 (100-point scale maintained)
+
+            # Validation: Weight sum must be 100
+            weight_sum = sum(adjusted_weights.values())
+            if abs(weight_sum - 100.0) > 0.01:
+                logger.warning(
+                    f"[NASDAQ] Weight sum != 100: {weight_sum:.2f} for {symbol} "
+                    f"(sector: {sector})"
+                )
+
+        else:
+            # NYSE/기타 거래소: Phase 3.1 기존 로직
+            base_weights = {
+                'growth': self.regime_weights['growth'] * 100,
+                'momentum': self.regime_weights['momentum'] * 100,
+                'quality': self.regime_weights['quality'] * 100,
+                'value': self.regime_weights['value'] * 100
+            }
+            adjusted_weights = self.sector_weights.get_combined_weights(base_weights, exchange, sector)
+
+        # Base score (Phase 3.1: 조정된 가중치 사용)
         base_score = (
-            value_score * self.regime_weights['value'] +
-            quality_score * self.regime_weights['quality'] +
-            momentum_score * self.regime_weights['momentum'] +
-            growth_score * self.regime_weights['growth']
+            growth_score * adjusted_weights['growth'] / 100 +
+            momentum_score * adjusted_weights['momentum'] / 100 +
+            quality_score * adjusted_weights['quality'] / 100 +
+            value_score * adjusted_weights['value'] / 100
         )
 
         # Factor Interaction 계산 (Phase 3)
@@ -270,6 +347,7 @@ class USQuantSystemV2:
         return {
             'symbol': symbol,
             'sector': sector,
+            'exchange': exchange,  # Phase 3.1
             'total_score': round(total_score, 1),
             'base_score': round(base_score, 1),
             'interaction_score': round(interaction_score, 1),
@@ -289,6 +367,13 @@ class USQuantSystemV2:
             'var_95': var_cvar_result['var_95'],
             'cvar_95': var_cvar_result['cvar_95'],
             'rs_value': rs_value,
+            # Phase 3.1: ORS and Adjusted Weights
+            'outlier_risk_score': outlier_risk_score,
+            'risk_flag': risk_flag,
+            'weight_growth': round(adjusted_weights['growth'], 1),
+            'weight_momentum': round(adjusted_weights['momentum'], 1),
+            'weight_quality': round(adjusted_weights['quality'], 1),
+            'weight_value': round(adjusted_weights['value'], 1),
             # Agent Metrics (Phase 4)
             'atr_pct': agent_result.get('atr_pct'),
             'stop_loss_pct': agent_result.get('stop_loss_pct'),
@@ -313,10 +398,10 @@ class USQuantSystemV2:
         }
 
     async def _get_stock_info(self, symbol: str) -> Optional[Dict]:
-        """종목 기본 정보 조회"""
+        """종목 기본 정보 조회 (Phase 3.1: exchange 추가)"""
 
         query = """
-        SELECT symbol, sector, market_cap
+        SELECT symbol, sector, market_cap, exchange
         FROM us_stock_basic
         WHERE symbol = $1
         """
@@ -416,6 +501,72 @@ class USQuantSystemV2:
         rs_value = ret_3m * 0.4 + ret_6m * 0.2 + ret_9m * 0.2 + ret_12m * 0.2
         return round(rs_value, 2)  # DECIMAL(21,2)
 
+    async def _calculate_ors(self, symbol: str, analysis_date: date) -> Dict:
+        """
+        Phase 3.1: Outlier Risk Score (ORS) 계산
+        - price, avg_volume, volatility_252d, market_cap 기반
+        - 점수 범위: 0-100
+        """
+        query = """
+        SELECT
+            b.market_cap,
+            d.close as price,
+            d.volume
+        FROM us_stock_basic b
+        LEFT JOIN us_daily d ON b.symbol = d.symbol AND d.date = $2
+        WHERE b.symbol = $1
+        """
+        rows = await self.db.execute_query(query, symbol, analysis_date)
+
+        if not rows or not rows[0].get('price'):
+            return {'ors': 0, 'risk_flag': 'NORMAL'}
+
+        r = rows[0]
+        price = float(r['price']) if r['price'] else 0
+        market_cap = float(r['market_cap']) if r['market_cap'] else 0
+
+        # 평균 거래량 계산 (최근 20일)
+        vol_query = """
+        SELECT AVG(volume) as avg_volume
+        FROM (
+            SELECT volume
+            FROM us_daily
+            WHERE symbol = $1 AND date <= $2
+            ORDER BY date DESC
+            LIMIT 20
+        ) sub
+        """
+        vol_rows = await self.db.execute_query(vol_query, symbol, analysis_date)
+        avg_volume = float(vol_rows[0]['avg_volume']) if vol_rows and vol_rows[0].get('avg_volume') else 0
+
+        # 변동성 계산 (연환산)
+        vol_price_query = """
+        SELECT close
+        FROM us_daily
+        WHERE symbol = $1 AND date <= $2
+        ORDER BY date DESC
+        LIMIT 253
+        """
+        vol_price_rows = await self.db.execute_query(vol_price_query, symbol, analysis_date)
+
+        volatility = 0
+        if vol_price_rows and len(vol_price_rows) > 20:
+            prices = [float(r['close']) for r in vol_price_rows if r['close']]
+            if len(prices) > 1:
+                returns = [(prices[i] - prices[i+1]) / prices[i+1] for i in range(len(prices)-1)]
+                import statistics
+                volatility = statistics.stdev(returns) * (252 ** 0.5) * 100 if returns else 0
+
+        # ORS 계산 (USOutlierRisk 모듈 사용)
+        ors_result = self.outlier_risk.calculate_ors_single(
+            price=price,
+            avg_volume=avg_volume,
+            volatility=volatility,
+            market_cap=market_cap
+        )
+
+        return ors_result
+
     def _calculate_grade_distribution(self, results: List[Dict]) -> Dict:
         """등급 분포 계산"""
 
@@ -481,7 +632,9 @@ class USQuantSystemV2:
             scenario_bullish_return, scenario_sideways_return, scenario_bearish_return,
             scenario_sample_count,
             buy_triggers, sell_triggers, hold_triggers,
-            iv_percentile, insider_signal
+            iv_percentile, insider_signal,
+            outlier_risk_score, risk_flag,
+            weight_growth, weight_momentum, weight_quality, weight_value
         ) VALUES (
             $1, $2,
             $3, $4,
@@ -495,7 +648,9 @@ class USQuantSystemV2:
             $29, $30, $31,
             $32,
             $33::jsonb, $34::jsonb, $35::jsonb,
-            $36, $37
+            $36, $37,
+            $38, $39,
+            $40, $41, $42, $43
         )
         ON CONFLICT (date, symbol) DO UPDATE SET
             final_score = EXCLUDED.final_score,
@@ -533,6 +688,12 @@ class USQuantSystemV2:
             hold_triggers = EXCLUDED.hold_triggers,
             iv_percentile = EXCLUDED.iv_percentile,
             insider_signal = EXCLUDED.insider_signal,
+            outlier_risk_score = EXCLUDED.outlier_risk_score,
+            risk_flag = EXCLUDED.risk_flag,
+            weight_growth = EXCLUDED.weight_growth,
+            weight_momentum = EXCLUDED.weight_momentum,
+            weight_quality = EXCLUDED.weight_quality,
+            weight_value = EXCLUDED.weight_value,
             updated_at = CURRENT_TIMESTAMP
         """
 
@@ -575,7 +736,14 @@ class USQuantSystemV2:
                 serialize_triggers(result.get('sell_triggers')),    # $34
                 serialize_triggers(result.get('hold_triggers')),    # $35
                 result.get('iv_percentile'),                        # $36
-                result.get('insider_signal')                        # $37
+                result.get('insider_signal'),                       # $37
+                # Phase 3.1 fields
+                result.get('outlier_risk_score'),                   # $38
+                result.get('risk_flag'),                            # $39
+                result.get('weight_growth'),                        # $40
+                result.get('weight_momentum'),                      # $41
+                result.get('weight_quality'),                       # $42
+                result.get('weight_value')                          # $43
             )
         except Exception as e:
             logger.error(f"{result['symbol']}: Failed to save - {e}")
@@ -886,7 +1054,7 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list: List[date]) -
                     date_fail += 1
                     batch_fail += 1
                     date_failed_symbols.append(symbol)
-                    batch_errors.append(f"{symbol}: {type(result).__name__}")
+                    batch_errors.append(f"{symbol}: {type(result).__name__}: {str(result)[:100]}")
                 elif result:
                     try:
                         await system._save_stock_grade(result, analysis_date)
@@ -915,7 +1083,9 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list: List[date]) -
                 for err in batch_errors:
                     print(f"    [실패] {err}")
             elif batch_errors:
-                print(f"    [실패] {len(batch_errors)}개 종목 (상세 생략)")
+                # 첫 번째 에러만 출력
+                print(f"    [실패] {batch_errors[0]}")
+                print(f"    [실패] ... 외 {len(batch_errors)-1}개 종목")
 
         date_time = time.time() - date_start_time
         success_rate = (date_success / len(symbols) * 100) if symbols else 0

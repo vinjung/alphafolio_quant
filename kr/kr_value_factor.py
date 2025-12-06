@@ -1084,6 +1084,119 @@ class ValueFactorCalculator:
         return max(0.0, min(100.0, final_score))
 
     # ========================================================================
+    # Extreme Risk Penalty Helpers (for V4, V25)
+    # ========================================================================
+
+    async def _calculate_volatility_penalty(self, volatility_annual):
+        """
+        Extreme volatility penalty for V4/V25
+
+        Based on empirical analysis (v4_v25_failure_analysis.csv):
+        - Vol > 100%: Average -47.3% return (16 stocks)
+        - Vol > 200%: Extreme speculative risk
+        """
+        if volatility_annual is None:
+            return 0
+
+        if volatility_annual > 200:
+            return -50
+        elif volatility_annual > 100:
+            return -30
+        elif volatility_annual > 60:
+            return -15
+        elif volatility_annual > 40:
+            return -5
+        else:
+            return 0
+
+    async def _calculate_beta_penalty(self, beta):
+        """
+        Beta-based risk penalty for V4/V25
+
+        Based on empirical analysis:
+        - Average beta of failed stocks: 15.5
+        - Beta > 5.0: Extreme market sensitivity
+        """
+        if beta is None:
+            return 0
+
+        if beta > 5.0:
+            return -40
+        elif beta > 3.0:
+            return -25
+        elif beta > 2.0:
+            return -10
+        elif beta > 1.5:
+            return -5
+        else:
+            return 0
+
+    async def _calculate_var_penalty(self, var_95):
+        """
+        VaR-based risk penalty for V4/V25
+
+        VaR(95%): Daily maximum loss at 95% confidence level
+        """
+        if var_95 is None or var_95 >= 0:
+            return 0
+
+        var_abs = abs(var_95)
+
+        if var_abs > 8.0:
+            return -30
+        elif var_abs > 5.0:
+            return -15
+        elif var_abs > 3.0:
+            return -5
+        else:
+            return 0
+
+    async def _get_volatility_for_risk_adjustment(self):
+        """Get volatility_annual for risk adjustment"""
+        query = """
+        SELECT volatility_annual
+        FROM kr_stock_grade
+        WHERE symbol = $1
+            AND ($2::date IS NULL OR date = $2)
+        ORDER BY date DESC
+        LIMIT 1
+        """
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+        if result and result[0]['volatility_annual']:
+            return float(result[0]['volatility_annual'])
+        return None
+
+    async def _get_beta_for_risk_adjustment(self):
+        """Get beta for risk adjustment"""
+        query = """
+        SELECT beta
+        FROM kr_stock_grade
+        WHERE symbol = $1
+            AND ($2::date IS NULL OR date = $2)
+        ORDER BY date DESC
+        LIMIT 1
+        """
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+        if result and result[0]['beta']:
+            return float(result[0]['beta'])
+        return None
+
+    async def _get_var_for_risk_adjustment(self):
+        """Get VaR(95%) for risk adjustment"""
+        query = """
+        SELECT var_95
+        FROM kr_stock_grade
+        WHERE symbol = $1
+            AND ($2::date IS NULL OR date = $2)
+        ORDER BY date DESC
+        LIMIT 1
+        """
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+        if result and result[0]['var_95']:
+            return float(result[0]['var_95'])
+        return None
+
+    # ========================================================================
     # V4. Sustainable Dividend Strategy (재설계)
     # ========================================================================
 
@@ -1291,7 +1404,23 @@ class ValueFactorCalculator:
 
             logger.info(f"V4: Moderate dividend (Yield: {dividend_yield:.2f}%)")
 
-        return score
+        # Apply extreme risk penalty
+        if score >= 40:
+            volatility = await self._get_volatility_for_risk_adjustment()
+            beta = await self._get_beta_for_risk_adjustment()
+            var_95 = await self._get_var_for_risk_adjustment()
+
+            vol_penalty = await self._calculate_volatility_penalty(volatility)
+            beta_penalty = await self._calculate_beta_penalty(beta)
+            var_penalty = await self._calculate_var_penalty(var_95)
+
+            total_penalty = vol_penalty + beta_penalty + var_penalty
+
+            if total_penalty < 0:
+                logger.info(f"V4: Extreme risk penalty applied: {total_penalty} (Vol: {vol_penalty}, Beta: {beta_penalty}, VaR: {var_penalty})")
+                score = score + total_penalty
+
+        return max(0, score)
 
     # ========================================================================
     # V5. PSR (Price to Sales Ratio) Strategy
@@ -4066,6 +4195,22 @@ class ValueFactorCalculator:
         score = cash_score * 0.50 + pbr_score * 0.30 + liquidity_score * 0.20
 
         logger.info(f"V25: Cash Rich (NetCash/MktCap: {net_cash_ratio:.1f}%, PBR: {pbr:.2f}, CurRatio: {current_ratio:.0f}%, Score: {score:.1f})")
+
+        # Apply extreme risk penalty
+        if score >= 40:
+            volatility = await self._get_volatility_for_risk_adjustment()
+            beta = await self._get_beta_for_risk_adjustment()
+            var_95 = await self._get_var_for_risk_adjustment()
+
+            vol_penalty = await self._calculate_volatility_penalty(volatility)
+            beta_penalty = await self._calculate_beta_penalty(beta)
+            var_penalty = await self._calculate_var_penalty(var_95)
+
+            total_penalty = vol_penalty + beta_penalty + var_penalty
+
+            if total_penalty < 0:
+                logger.info(f"V25: Extreme risk penalty applied: {total_penalty} (Vol: {vol_penalty}, Beta: {beta_penalty}, VaR: {var_penalty})")
+                score = score + total_penalty
 
         return min(100, max(0, score))
 

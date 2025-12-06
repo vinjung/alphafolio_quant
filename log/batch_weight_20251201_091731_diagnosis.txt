@@ -1,0 +1,74 @@
+================================================================================
+BATCH WEIGHT CALCULATOR - PERFORMANCE DIAGNOSIS REPORT
+================================================================================
+
+### SUMMARY ###
+Total time: 6.80s
+Total stocks: 2761
+Processed: 2647
+Skipped: 114
+Average per stock: 0.0025s
+
+### PHASE BREAKDOWN ###
+phase1      :    3.89s ( 57.2%)
+phase2      :    2.83s ( 41.6%)
+phase2_5    :    0.01s (  0.1%)
+phase3      :    0.08s (  1.1%)
+TOTAL       :    6.80s (100.0%)
+
+### QUERY ANALYSIS ###
+Total queries executed: 10
+Total query time: 5.78s
+
+Top 5 slowest queries:
+  1. Query 2: Combined Market Data (Latest + Liquidity + Volatility)
+     Time: 2.159s
+     Rows: 2,761
+     Memory: +0.02MB
+
+  2. Unnamed Query
+     Time: 1.959s
+     Rows: 163
+     Memory: +0.03MB
+
+  3. Query 1: Basic Info
+     Time: 0.468s
+     Rows: 2,647
+     Memory: +0.21MB
+
+  4. Unnamed Query
+     Time: 0.185s
+     Rows: 1
+     Memory: +0.00MB
+
+  5. Unnamed Query
+     Time: 0.184s
+     Rows: 1
+     Memory: +0.00MB
+
+### MEMORY ANALYSIS ###
+Memory progression:
+  Start               :    91.18 MB ( 0.58%)
+  After Phase 1       :    91.22 MB ( 0.58%)
+  After Phase 2       :    91.46 MB ( 0.58%)
+  After Phase 2.5     :    92.23 MB ( 0.58%)
+  After Phase 3       :    92.23 MB ( 0.58%)
+
+  Peak memory: 92.23 MB
+  Memory growth: 1.05 MB
+
+### BOTTLENECK DIAGNOSIS ###
+Slowest phase: phase1 (3.89s, 57.2%)
+WARNING: Phase 2 (data fetching) is a bottleneck (>40% of total time)
+  Possible causes:
+  - Missing database indexes (run create_indexes_optimization.sql)
+  - Slow network connection to database
+  - Large result set (consider batching)
+
+### RECOMMENDATIONS ###
+1. Database indexes may help (run kr/create_indexes_optimization.sql)
+
+Next steps:
+- Review query execution plans with EXPLAIN ANALYZE
+- Monitor index usage after running create_indexes_optimization.sql
+- Consider implementing parallel processing if Phase 3 is slow

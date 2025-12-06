@@ -230,15 +230,17 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
         sector_rotation_score = additional_metrics.get('sector_rotation_score', 50)
 
         # Final Score (Option 3: IC-based weights - Only helpful metrics)
+        # All components are 0-100 scale for consistency
         # Weights based on IC contribution:
-        # - base_factor_score: 36% (IC +0.0463)
-        # - sector_rotation_score: 25% (IC +0.0321)
-        # - factor_combination_bonus: 39% (IC +0.0503)
+        # - base_factor_score: 36% (IC +0.0463, range 0-100)
+        # - sector_rotation_score: 25% (IC +0.0321, range 0-100)
+        # - factor_combination_bonus: 39% (IC +0.0503, range 0-100)
         # Validation result: IC improved from +0.0038 to +0.0600 (+1,479%)
+        # Result: final_score is 0-100 scale (100-point system)
         final_score = (
-            base_factor_score * 0.36 +
-            sector_rotation_score * 0.25 +
-            factor_combo_bonus * 0.39
+            base_factor_score * 0.36 +           # 0-100 x 0.36
+            sector_rotation_score * 0.25 +       # 0-100 x 0.25
+            factor_combo_bonus * 0.39            # 0-100 x 0.39 = 0-100 total
         )
         # Round to 1 decimal place for DECIMAL(5,1) format
         final_score = round(final_score, 1)
@@ -449,7 +451,11 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             'value_v2_detail': value_v2_detail,
             'quality_v2_detail': quality_v2_detail,
             'momentum_v2_detail': momentum_v2_detail,
-            'growth_v2_detail': growth_v2_detail
+            'growth_v2_detail': growth_v2_detail,
+            # Phase 3.9: Risk-Adjusted Returns
+            'sharpe_ratio': additional_metrics.get('sharpe_ratio'),
+            'sortino_ratio': additional_metrics.get('sortino_ratio'),
+            'calmar_ratio': additional_metrics.get('calmar_ratio')
         }
 
         success = await save_to_kr_stock_grade(db_manager, symbol, analysis_date, grade_data)
