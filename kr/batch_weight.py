@@ -757,6 +757,34 @@ class AsyncBatchWeightCalculator:
                     'annual_volatility': float(row['annual_volatility']) if row['annual_volatility'] else None
                 })
 
+        # Query 3: Supply/Demand data (Phase 3.10)
+        logger.info("Query 3/3: Fetching supply/demand data (institutional + foreign flows)...")
+        query_supply_demand = """
+        SELECT
+            symbol,
+            SUM(inst_net_volume) as inst_net_30d,
+            SUM(foreign_net_volume) as foreign_net_30d
+        FROM kr_individual_investor_daily_trading
+        WHERE symbol = ANY($1)
+            AND date >= CURRENT_DATE - INTERVAL '30 days'
+            AND date <= CURRENT_DATE
+        GROUP BY symbol
+        """
+
+        result_supply = await self.execute_query(
+            query_supply_demand,
+            (symbols,),
+            query_name="Query 3: Supply/Demand Data (30-day inst/foreign flows)"
+        )
+
+        for row in result_supply:
+            symbol = row['symbol']
+            if symbol in all_data:
+                all_data[symbol].update({
+                    'inst_net_30d': int(row['inst_net_30d']) if row['inst_net_30d'] else 0,
+                    'foreign_net_30d': int(row['foreign_net_30d']) if row['foreign_net_30d'] else 0
+                })
+
         logger.info(f"Bulk data fetch complete: {len(all_data)} stocks")
         logger.debug(f"Data completeness: {len(all_data)}/{len(symbols)} stocks have data")
 
@@ -1089,6 +1117,55 @@ class AsyncBatchWeightCalculator:
         }
         return volatility_weights.get(level, {'all': 1.0})
 
+    def get_supply_demand_weights(self, supply_demand):
+        """Get supply/demand weight adjustments (Phase 3.10)"""
+        supply_demand_weights = {
+            'STRONG_BUY': {
+                'momentum': 1.3,
+                'growth': 1.2,
+                'value': 0.8,
+                'quality': 0.9
+            },
+            'INST_LED': {
+                'quality': 1.2,
+                'value': 1.1,
+                'momentum': 0.9,
+                'growth': 0.9
+            },
+            'FOREIGN_LED': {
+                'momentum': 1.2,
+                'growth': 1.1,
+                'value': 0.9,
+                'quality': 0.9
+            },
+            'STRONG_SELL': {
+                'quality': 1.3,
+                'value': 1.2,
+                'momentum': 0.7,
+                'growth': 0.8
+            },
+            'NEUTRAL': {
+                'all': 1.0
+            }
+        }
+        return supply_demand_weights.get(supply_demand, {'all': 1.0})
+
+    def _classify_supply_demand(self, inst_net, foreign_net):
+        """Classify supply/demand pattern from investor flows (Phase 3.10)"""
+        if inst_net is None or foreign_net is None:
+            return 'NEUTRAL'
+
+        if inst_net > 0 and foreign_net > 0:
+            return 'STRONG_BUY'
+        elif inst_net > 0 and foreign_net <= 0:
+            return 'INST_LED'
+        elif inst_net <= 0 and foreign_net > 0:
+            return 'FOREIGN_LED'
+        elif inst_net < 0 and foreign_net < 0:
+            return 'STRONG_SELL'
+        else:
+            return 'NEUTRAL'
+
     def _get_market_cap_category(self, market_cap) -> str:
         """Helper: Convert market cap to category"""
         if market_cap is None:
@@ -1178,6 +1255,12 @@ class AsyncBatchWeightCalculator:
         volatility = stock_data.get('annual_volatility')
         condition_weights.append(self.get_volatility_weights(volatility))
 
+        # 9. Supply/Demand (Phase 3.10)
+        inst_net = stock_data.get('inst_net_30d', 0)
+        foreign_net = stock_data.get('foreign_net_30d', 0)
+        supply_demand = self._classify_supply_demand(inst_net, foreign_net)
+        condition_weights.append(self.get_supply_demand_weights(supply_demand))
+
         # Calculate final weights
         calculator = WeightCalculator()
         final_weights = calculator.calculate_final_weights(condition_weights)
@@ -1249,6 +1332,11 @@ class AsyncBatchWeightCalculator:
         # Prepare conditions for all stocks
         all_conditions = {}
         for symbol, stock_data in all_stock_data.items():
+            # Classify supply/demand (Phase 3.10)
+            inst_net = stock_data.get('inst_net_30d', 0)
+            foreign_net = stock_data.get('foreign_net_30d', 0)
+            supply_demand = self._classify_supply_demand(inst_net, foreign_net)
+
             all_conditions[symbol] = {
                 'exchange': stock_data.get('exchange'),
                 'market_cap_category': self._get_market_cap_category(stock_data.get('market_cap')),
@@ -1257,7 +1345,8 @@ class AsyncBatchWeightCalculator:
                 'market_sentiment': self.common_data['market_sentiment'].get(stock_data.get('exchange'), 'NEUTRAL'),
                 'sector_cycle': self.common_data['sector_cycle'].get(stock_data.get('industry'), 'STABLE'),
                 'theme': stock_data.get('theme'),
-                'volatility': self._get_volatility_level(stock_data.get('annual_volatility'))
+                'volatility': self._get_volatility_level(stock_data.get('annual_volatility')),
+                'supply_demand': supply_demand  # Phase 3.10
             }
 
         # Classify all stocks (with 24-hour caching)
@@ -1298,6 +1387,10 @@ class AsyncBatchWeightCalculator:
             weights = self.calculate_weights_for_stock(symbol, stock_data)
 
             # Build result
+            inst_net = stock_data.get('inst_net_30d', 0)
+            foreign_net = stock_data.get('foreign_net_30d', 0)
+            supply_demand = self._classify_supply_demand(inst_net, foreign_net)
+
             results[symbol] = {
                 'weights': weights,
                 'stock_data': stock_data,
@@ -1310,6 +1403,7 @@ class AsyncBatchWeightCalculator:
                     'sector_cycle': self.common_data['sector_cycle'].get(stock_data.get('industry')),
                     'theme': stock_data.get('theme'),
                     'volatility': stock_data.get('annual_volatility'),
+                    'supply_demand': supply_demand,  # Phase 3.10
                     'market_state': market_states.get(symbol, '기타')
                 }
             }

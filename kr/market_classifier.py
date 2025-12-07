@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class MarketClassifier:
     """
-    Classify stocks into 19 market states based on 8 conditions
+    Classify stocks into 19 market states based on 9 conditions (Phase 3.10)
     - Exchange (KOSPI/KOSDAQ)
     - Market Cap (MEGA/LARGE/MEDIUM/SMALL)
     - Liquidity (HIGH/MEDIUM/LOW)
@@ -24,6 +24,7 @@ class MarketClassifier:
     - Sector Cycle (HOT/GROWING/STABLE/DECLINING/COLD)
     - Theme (17 themes)
     - Volatility (VERY_HIGH/HIGH/MEDIUM/LOW)
+    - Supply/Demand (STRONG_BUY/INST_LED/FOREIGN_LED/STRONG_SELL/NEUTRAL) [Phase 3.10]
     """
 
     def __init__(self, cache_dir: str = None):
@@ -59,7 +60,8 @@ class MarketClassifier:
                     'economic_cycle': ['EXPANSION'],
                     'market_sentiment': ['OVERHEATED', 'GREED'],
                     'sector_cycle': ['HOT', 'GROWING'],
-                    'volatility': ['HIGH', 'VERY_HIGH']
+                    'volatility': ['HIGH', 'VERY_HIGH'],
+                    'supply_demand': ['STRONG_BUY', 'FOREIGN_LED']  # Phase 3.10
                 },
                 'priority': 10
             },
@@ -98,7 +100,8 @@ class MarketClassifier:
                     'economic_cycle': ['RECESSION'],
                     'market_sentiment': ['PANIC', 'FEAR'],
                     'sector_cycle': ['DECLINING', 'COLD'],
-                    'volatility': ['LOW', 'MEDIUM']
+                    'volatility': ['LOW', 'MEDIUM'],
+                    'supply_demand': ['STRONG_SELL', 'INST_LED', 'NEUTRAL']  # Phase 3.10
                 },
                 'priority': 10
             },
@@ -178,7 +181,8 @@ class MarketClassifier:
                     'economic_cycle': ['EXPANSION'],
                     'market_sentiment': ['GREED', 'OVERHEATED'],
                     'sector_cycle': ['HOT', 'GROWING'],
-                    'volatility': ['HIGH', 'VERY_HIGH']
+                    'volatility': ['HIGH', 'VERY_HIGH'],
+                    'supply_demand': ['STRONG_BUY', 'FOREIGN_LED']  # Phase 3.10
                 },
                 'priority': 10
             },

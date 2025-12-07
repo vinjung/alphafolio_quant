@@ -34,108 +34,128 @@ logger = logging.getLogger(__name__)
 
 QUALITY_STRATEGY_WEIGHTS = {
     # Large Cap Group (6)
+    # Q18-Q21: Phase 3.8 Sustainable Growth Paradigm
     'KOSPI대형-확장과열-공격형': {
         'Q1': 0.8, 'Q2': 1.0, 'Q3': 0.5, 'Q4': 0.6, 'Q5': 1.2, 'Q6': 1.0,
         'Q7': 0.7, 'Q8': 0.5, 'Q9': 1.0, 'Q10': 0.8, 'Q11': 0.9, 'Q12': 1.0,
-        'Q13': 0.7, 'Q14': 0.5, 'Q15': 1.0, 'Q16': 0.6, 'Q17': 0.9
+        'Q13': 0.7, 'Q14': 0.5, 'Q15': 1.0, 'Q16': 0.6, 'Q17': 0.9,
+        'Q18': 1.3, 'Q19': 0.8, 'Q20': 0.9, 'Q21': 1.0  # Phase 3.8: SGR 중시
     },
     'KOSPI대형-확장중립-성장형': {
         'Q1': 1.5, 'Q2': 1.5, 'Q3': 1.2, 'Q4': 1.0, 'Q5': 1.4, 'Q6': 1.3,
         'Q7': 1.3, 'Q8': 1.2, 'Q9': 1.4, 'Q10': 1.3, 'Q11': 1.4, 'Q12': 1.3,
-        'Q13': 1.2, 'Q14': 1.1, 'Q15': 1.4, 'Q16': 1.2, 'Q17': 1.3
+        'Q13': 1.2, 'Q14': 1.1, 'Q15': 1.4, 'Q16': 1.2, 'Q17': 1.3,
+        'Q18': 1.6, 'Q19': 1.3, 'Q20': 1.2, 'Q21': 1.4  # Phase 3.8
     },
     'KOSPI대형-둔화공포-방어형': {
         'Q1': 2.0, 'Q2': 1.8, 'Q3': 2.0, 'Q4': 1.8, 'Q5': 1.5, 'Q6': 1.7,
         'Q7': 2.0, 'Q8': 2.0, 'Q9': 1.8, 'Q10': 1.8, 'Q11': 1.9, 'Q12': 1.6,
-        'Q13': 1.5, 'Q14': 2.0, 'Q15': 1.9, 'Q16': 2.0, 'Q17': 1.8
+        'Q13': 1.5, 'Q14': 2.0, 'Q15': 1.9, 'Q16': 2.0, 'Q17': 1.8,
+        'Q18': 1.5, 'Q19': 2.0, 'Q20': 1.4, 'Q21': 1.8  # Phase 3.8: Accrual 중시
     },
     'KOSPI대형-침체패닉-초방어형': {
         'Q1': 2.0, 'Q2': 2.0, 'Q3': 2.0, 'Q4': 2.0, 'Q5': 1.3, 'Q6': 1.8,
         'Q7': 2.0, 'Q8': 2.0, 'Q9': 2.0, 'Q10': 2.0, 'Q11': 2.0, 'Q12': 1.5,
-        'Q13': 1.8, 'Q14': 2.0, 'Q15': 2.0, 'Q16': 2.0, 'Q17': 2.0
+        'Q13': 1.8, 'Q14': 2.0, 'Q15': 2.0, 'Q16': 2.0, 'Q17': 2.0,
+        'Q18': 1.4, 'Q19': 2.0, 'Q20': 1.5, 'Q21': 2.0  # Phase 3.8
     },
     'KOSPI대형-회복탐욕-밸류형': {
         'Q1': 1.6, 'Q2': 1.5, 'Q3': 1.5, 'Q4': 1.3, 'Q5': 1.5, 'Q6': 1.5,
         'Q7': 1.6, 'Q8': 1.5, 'Q9': 1.5, 'Q10': 1.5, 'Q11': 1.6, 'Q12': 1.4,
-        'Q13': 1.4, 'Q14': 1.4, 'Q15': 1.6, 'Q16': 1.5, 'Q17': 1.5
+        'Q13': 1.4, 'Q14': 1.4, 'Q15': 1.6, 'Q16': 1.5, 'Q17': 1.5,
+        'Q18': 1.5, 'Q19': 1.5, 'Q20': 1.3, 'Q21': 1.5  # Phase 3.8
     },
     'KOSPI대형-중립안정-균형형': {
         'Q1': 1.5, 'Q2': 1.4, 'Q3': 1.4, 'Q4': 1.2, 'Q5': 1.3, 'Q6': 1.3,
         'Q7': 1.5, 'Q8': 1.5, 'Q9': 1.4, 'Q10': 1.4, 'Q11': 1.5, 'Q12': 1.3,
-        'Q13': 1.3, 'Q14': 1.3, 'Q15': 1.5, 'Q16': 1.4, 'Q17': 1.4
+        'Q13': 1.3, 'Q14': 1.3, 'Q15': 1.5, 'Q16': 1.4, 'Q17': 1.4,
+        'Q18': 1.5, 'Q19': 1.4, 'Q20': 1.2, 'Q21': 1.4  # Phase 3.8
     },
 
     # Mid Cap Group (6)
     'KOSPI중형-확장과열-모멘텀형': {
         'Q1': 0.7, 'Q2': 0.9, 'Q3': 0.6, 'Q4': 0.7, 'Q5': 1.3, 'Q6': 1.1,
         'Q7': 0.5, 'Q8': 0.6, 'Q9': 0.9, 'Q10': 0.7, 'Q11': 0.8, 'Q12': 1.2,
-        'Q13': 0.8, 'Q14': 0.6, 'Q15': 0.9, 'Q16': 0.7, 'Q17': 1.0
+        'Q13': 0.8, 'Q14': 0.6, 'Q15': 0.9, 'Q16': 0.7, 'Q17': 1.0,
+        'Q18': 1.2, 'Q19': 0.7, 'Q20': 0.8, 'Q21': 0.9  # Phase 3.8
     },
     'KOSPI중형-회복중립-성장형': {
         'Q1': 1.3, 'Q2': 1.4, 'Q3': 1.1, 'Q4': 1.0, 'Q5': 1.5, 'Q6': 1.4,
         'Q7': 1.0, 'Q8': 1.1, 'Q9': 1.3, 'Q10': 1.2, 'Q11': 1.3, 'Q12': 1.4,
-        'Q13': 1.1, 'Q14': 1.0, 'Q15': 1.3, 'Q16': 1.1, 'Q17': 1.3
+        'Q13': 1.1, 'Q14': 1.0, 'Q15': 1.3, 'Q16': 1.1, 'Q17': 1.3,
+        'Q18': 1.5, 'Q19': 1.2, 'Q20': 1.1, 'Q21': 1.3  # Phase 3.8
     },
     'KOSPI중형-둔화공포-혼조형': {
         'Q1': 1.6, 'Q2': 1.5, 'Q3': 1.6, 'Q4': 1.5, 'Q5': 1.2, 'Q6': 1.3,
         'Q7': 1.5, 'Q8': 1.6, 'Q9': 1.5, 'Q10': 1.5, 'Q11': 1.6, 'Q12': 1.2,
-        'Q13': 1.3, 'Q14': 1.6, 'Q15': 1.5, 'Q16': 1.6, 'Q17': 1.4
+        'Q13': 1.3, 'Q14': 1.6, 'Q15': 1.5, 'Q16': 1.6, 'Q17': 1.4,
+        'Q18': 1.3, 'Q19': 1.6, 'Q20': 1.3, 'Q21': 1.5  # Phase 3.8
     },
     'KOSDAQ중형-확장탐욕-공격성장형': {
         'Q1': 0.5, 'Q2': 0.7, 'Q3': 0.4, 'Q4': 0.5, 'Q5': 1.0, 'Q6': 0.8,
         'Q7': 0.3, 'Q8': 0.4, 'Q9': 0.7, 'Q10': 0.5, 'Q11': 0.6, 'Q12': 0.9,
-        'Q13': 0.6, 'Q14': 0.4, 'Q15': 0.7, 'Q16': 0.5, 'Q17': 0.8
+        'Q13': 0.6, 'Q14': 0.4, 'Q15': 0.7, 'Q16': 0.5, 'Q17': 0.8,
+        'Q18': 1.4, 'Q19': 0.6, 'Q20': 0.7, 'Q21': 0.8  # Phase 3.8: SGR 최고 가중치
     },
     'KOSDAQ중형-회복중립-성장테마형': {
         'Q1': 1.0, 'Q2': 1.2, 'Q3': 0.8, 'Q4': 0.8, 'Q5': 1.3, 'Q6': 1.2,
         'Q7': 0.6, 'Q8': 0.8, 'Q9': 1.1, 'Q10': 0.9, 'Q11': 1.0, 'Q12': 1.2,
-        'Q13': 0.9, 'Q14': 0.7, 'Q15': 1.1, 'Q16': 0.8, 'Q17': 1.1
+        'Q13': 0.9, 'Q14': 0.7, 'Q15': 1.1, 'Q16': 0.8, 'Q17': 1.1,
+        'Q18': 1.4, 'Q19': 1.0, 'Q20': 0.9, 'Q21': 1.1  # Phase 3.8
     },
     'KOSDAQ중형-침체공포-역발상형': {
         'Q1': 1.5, 'Q2': 1.4, 'Q3': 1.5, 'Q4': 1.6, 'Q5': 1.0, 'Q6': 1.2,
         'Q7': 1.2, 'Q8': 1.5, 'Q9': 1.4, 'Q10': 1.4, 'Q11': 1.5, 'Q12': 1.0,
-        'Q13': 1.2, 'Q14': 1.5, 'Q15': 1.4, 'Q16': 1.5, 'Q17': 1.3
+        'Q13': 1.2, 'Q14': 1.5, 'Q15': 1.4, 'Q16': 1.5, 'Q17': 1.3,
+        'Q18': 1.2, 'Q19': 1.5, 'Q20': 1.2, 'Q21': 1.4  # Phase 3.8
     },
 
-    # Small Cap Group (4)
+    # Small Cap Group (4) - 소형주는 성장 잠재력 중시
     'KOSDAQ소형-핫섹터-초고위험형': {
         'Q1': 0.3, 'Q2': 0.5, 'Q3': 0.2, 'Q4': 0.8, 'Q5': 0.8, 'Q6': 0.6,
         'Q7': 0.1, 'Q8': 0.2, 'Q9': 0.5, 'Q10': 0.3, 'Q11': 0.4, 'Q12': 0.7,
-        'Q13': 0.4, 'Q14': 0.2, 'Q15': 0.5, 'Q16': 0.3, 'Q17': 0.6
+        'Q13': 0.4, 'Q14': 0.2, 'Q15': 0.5, 'Q16': 0.3, 'Q17': 0.6,
+        'Q18': 1.5, 'Q19': 0.5, 'Q20': 0.6, 'Q21': 0.7  # Phase 3.8: SGR 최고
     },
     'KOSDAQ소형-성장테마-고위험형': {
         'Q1': 0.5, 'Q2': 0.7, 'Q3': 0.3, 'Q4': 0.9, 'Q5': 1.0, 'Q6': 0.8,
         'Q7': 0.2, 'Q8': 0.3, 'Q9': 0.7, 'Q10': 0.5, 'Q11': 0.6, 'Q12': 0.9,
-        'Q13': 0.6, 'Q14': 0.3, 'Q15': 0.7, 'Q16': 0.4, 'Q17': 0.8
+        'Q13': 0.6, 'Q14': 0.3, 'Q15': 0.7, 'Q16': 0.4, 'Q17': 0.8,
+        'Q18': 1.4, 'Q19': 0.6, 'Q20': 0.7, 'Q21': 0.8  # Phase 3.8
     },
     'KOSDAQ소형-침체-극단역발상형': {
         'Q1': 1.2, 'Q2': 1.0, 'Q3': 1.3, 'Q4': 1.8, 'Q5': 0.8, 'Q6': 1.0,
         'Q7': 0.8, 'Q8': 1.2, 'Q9': 1.0, 'Q10': 1.0, 'Q11': 1.2, 'Q12': 0.8,
-        'Q13': 1.0, 'Q14': 1.3, 'Q15': 1.0, 'Q16': 1.3, 'Q17': 1.1
+        'Q13': 1.0, 'Q14': 1.3, 'Q15': 1.0, 'Q16': 1.3, 'Q17': 1.1,
+        'Q18': 1.1, 'Q19': 1.3, 'Q20': 1.0, 'Q21': 1.2  # Phase 3.8
     },
     'KOSDAQ소형-회복-모멘텀형': {
         'Q1': 0.8, 'Q2': 0.9, 'Q3': 0.6, 'Q4': 1.0, 'Q5': 1.2, 'Q6': 1.0,
         'Q7': 0.4, 'Q8': 0.6, 'Q9': 0.9, 'Q10': 0.7, 'Q11': 0.8, 'Q12': 1.1,
-        'Q13': 0.8, 'Q14': 0.5, 'Q15': 0.9, 'Q16': 0.6, 'Q17': 1.0
+        'Q13': 0.8, 'Q14': 0.5, 'Q15': 0.9, 'Q16': 0.6, 'Q17': 1.0,
+        'Q18': 1.3, 'Q19': 0.8, 'Q20': 0.8, 'Q21': 0.9  # Phase 3.8
     },
 
     # Special Situation Group (2)
     '전시장-극저유동성-고위험형': {
         'Q1': 1.8, 'Q2': 1.6, 'Q3': 2.0, 'Q4': 2.0, 'Q5': 0.8, 'Q6': 1.5,
         'Q7': 1.5, 'Q8': 1.8, 'Q9': 1.6, 'Q10': 1.7, 'Q11': 1.8, 'Q12': 0.8,
-        'Q13': 1.3, 'Q14': 2.0, 'Q15': 1.7, 'Q16': 2.0, 'Q17': 1.6
+        'Q13': 1.3, 'Q14': 2.0, 'Q15': 1.7, 'Q16': 2.0, 'Q17': 1.6,
+        'Q18': 1.2, 'Q19': 1.8, 'Q20': 1.3, 'Q21': 1.6  # Phase 3.8
     },
     '테마특화-모멘텀폭발형': {
         'Q1': 0.4, 'Q2': 0.6, 'Q3': 0.3, 'Q4': 0.6, 'Q5': 1.0, 'Q6': 0.8,
         'Q7': 0.2, 'Q8': 0.3, 'Q9': 0.6, 'Q10': 0.4, 'Q11': 0.5, 'Q12': 0.9,
-        'Q13': 0.5, 'Q14': 0.3, 'Q15': 0.6, 'Q16': 0.4, 'Q17': 0.7
+        'Q13': 0.5, 'Q14': 0.3, 'Q15': 0.6, 'Q16': 0.4, 'Q17': 0.7,
+        'Q18': 1.3, 'Q19': 0.5, 'Q20': 0.6, 'Q21': 0.7  # Phase 3.8
     },
 
     # Others (fallback)
     '기타': {
         'Q1': 1.0, 'Q2': 1.0, 'Q3': 1.0, 'Q4': 1.0, 'Q5': 1.0, 'Q6': 1.0,
         'Q7': 1.0, 'Q8': 1.0, 'Q9': 1.0, 'Q10': 1.0, 'Q11': 1.0, 'Q12': 1.0,
-        'Q13': 1.0, 'Q14': 1.0, 'Q15': 1.0, 'Q16': 1.0, 'Q17': 1.0
+        'Q13': 1.0, 'Q14': 1.0, 'Q15': 1.0, 'Q16': 1.0, 'Q17': 1.0,
+        'Q18': 1.0, 'Q19': 1.0, 'Q20': 1.0, 'Q21': 1.0  # Phase 3.8
     }
 }
 
@@ -1967,18 +1987,447 @@ class QualityFactorCalculator:
         return score
 
     # ========================================================================
+    # Q18. Sustainable Growth Rate (지속가능성장률) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_q18_sustainable_growth_rate(self):
+        """
+        Q18. Sustainable Growth Rate Strategy (Phase 3.8 - Paradigm Shift)
+
+        핵심 개념: "재무건전성" → "지속성장성" 패러다임 전환
+        - QuantPedia 연구 기반: Quality Factor SGR 6.7% 연간 수익률
+        - 지속가능성장률 = ROE × (1 - 배당성향)
+        - 외부 자금 조달 없이 자체적으로 성장할 수 있는 비율
+
+        Score calculation:
+        1. ROE (50%): 수익성 기반
+        2. Retention Rate (30%): 재투자 비율 = 1 - 배당성향
+        3. SGR Value (20%): ROE × Retention Rate
+
+        Higher SGR = Higher Score (성장 잠재력)
+
+        Data: kr_financial_position, kr_stock_dividends
+        """
+        # Step 1: Get ROE (Net Income / Total Equity)
+        roe_query = """
+        SELECT
+            bsns_year,
+            MAX(CASE WHEN account_nm LIKE '%당기순이익%' OR account_nm = '당기순이익(손실)'
+                THEN thstrm_amount END) as net_income,
+            MAX(CASE WHEN account_nm LIKE '%자본총계%' OR account_nm = '자본총계'
+                THEN thstrm_amount END) as total_equity
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND sj_div IN ('CIS', 'BS')
+            AND rcept_dt <= COALESCE($2::date, CURRENT_DATE)
+        GROUP BY bsns_year
+        ORDER BY bsns_year DESC
+        LIMIT 3
+        """
+
+        roe_result = await self.execute_query(roe_query, self.symbol, self.analysis_date)
+
+        if not roe_result:
+            return None
+
+        # Calculate ROE
+        roe_values = []
+        for row in roe_result:
+            if row['net_income'] and row['total_equity'] and float(row['total_equity']) > 0:
+                roe = (float(row['net_income']) / float(row['total_equity'])) * 100
+                roe_values.append(roe)
+
+        if not roe_values:
+            return None
+
+        current_roe = roe_values[0]
+        avg_roe = sum(roe_values) / len(roe_values)
+
+        # Step 2: Get Payout Ratio from kr_dividends (DART data)
+        payout_query = """
+        SELECT thstrm as payout_ratio
+        FROM kr_dividends
+        WHERE symbol = $1
+            AND se = '(연결)현금배당성향(%)'
+        ORDER BY stlm_dt DESC
+        LIMIT 1
+        """
+
+        payout_result = await self.execute_query(payout_query, self.symbol)
+
+        payout_ratio = 0.0
+        if payout_result and payout_result[0].get('payout_ratio'):
+            payout_ratio = float(payout_result[0]['payout_ratio'])
+
+        # Retention Rate = 1 - Payout Ratio (cap at 100%)
+        retention_rate = max(0, min(100, 100 - payout_ratio))
+
+        # Step 3: Calculate Sustainable Growth Rate
+        sgr = (current_roe / 100) * (retention_rate / 100) * 100  # As percentage
+
+        # Step 4: Calculate component scores
+
+        # ROE Score (50%): 0% = 0, 10% = 70, 20%+ = 100
+        if current_roe >= 20:
+            roe_score = 100
+        elif current_roe <= 0:
+            roe_score = 0
+        else:
+            roe_score = min(100, current_roe * 5)
+
+        # Retention Rate Score (30%): 0% = 0, 50% = 70, 70%+ = 100
+        # Too high retention (>90%) could mean no dividend = slight penalty
+        if 50 <= retention_rate <= 80:
+            retention_score = 100  # Sweet spot
+        elif retention_rate >= 90:
+            retention_score = 80  # Too much retention, no shareholder return
+        elif retention_rate >= 30:
+            retention_score = 50 + retention_rate  # Linear scale
+        elif retention_rate > 0:
+            retention_score = retention_rate * 1.67
+        else:
+            retention_score = 0
+
+        # SGR Score (20%): 0% = 0, 8% = 70, 15%+ = 100
+        if sgr >= 15:
+            sgr_score = 100
+        elif sgr <= 0:
+            sgr_score = 0
+        else:
+            sgr_score = min(100, sgr * 6.67)
+
+        # Base score
+        score = roe_score * 0.50 + retention_score * 0.30 + sgr_score * 0.20
+
+        logger.info(f"Q18: SGR (ROE: {current_roe:.1f}%, Retention: {retention_rate:.1f}%, SGR: {sgr:.1f}%, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # Q19. Accrual Quality (발생액 품질) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_q19_accrual_quality(self):
+        """
+        Q19. Accrual Quality Strategy (Phase 3.8 - Paradigm Shift)
+
+        핵심 개념: 이익의 질 측정
+        - 영업현금흐름 / 당기순이익 비율
+        - 높을수록 이익이 현금으로 뒷받침됨 (고품질)
+        - 낮으면 회계상 이익만 있고 현금 유입 없음 (저품질)
+
+        Score calculation:
+        1. Accrual Ratio = Operating CF / Net Income
+        2. >1.0: 100점 (현금이 이익보다 많음 = 보수적 회계)
+        3. 0.8-1.0: 80점 (정상 범위)
+        4. 0.5-0.8: 60점 (주의 필요)
+        5. <0.5: 40점 이하 (저품질 이익)
+        6. <0 or Net Income <0: 특수 처리
+
+        Data: kr_financial_position (CIS: 당기순이익, CF: 영업활동현금흐름)
+        """
+        # Step 1: Get Net Income
+        ni_query = """
+        SELECT
+            bsns_year,
+            thstrm_amount as net_income
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND sj_div = 'CIS'
+            AND (account_nm LIKE '%당기순이익%' OR account_nm = '당기순이익(손실)')
+            AND rcept_dt <= COALESCE($2::date, CURRENT_DATE)
+        ORDER BY bsns_year DESC, rcept_dt DESC
+        LIMIT 1
+        """
+
+        ni_result = await self.execute_query(ni_query, self.symbol, self.analysis_date)
+
+        if not ni_result or not ni_result[0]['net_income']:
+            return None
+
+        net_income = float(ni_result[0]['net_income'])
+
+        # Step 2: Get Operating Cash Flow
+        cf_query = """
+        SELECT thstrm_amount as operating_cf
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND sj_div = 'CF'
+            AND (
+                account_nm LIKE '%영업활동%현금흐름%'
+                OR account_nm LIKE '%영업활동으로%현금%'
+                OR account_nm = '영업활동현금흐름'
+            )
+            AND rcept_dt <= COALESCE($2::date, CURRENT_DATE)
+        ORDER BY bsns_year DESC, rcept_dt DESC
+        LIMIT 1
+        """
+
+        cf_result = await self.execute_query(cf_query, self.symbol, self.analysis_date)
+
+        if not cf_result or cf_result[0]['operating_cf'] is None:
+            # No CF data = assume neutral
+            return 50
+
+        operating_cf = float(cf_result[0]['operating_cf'])
+
+        # Step 3: Calculate Accrual Ratio and Score
+        if net_income <= 0:
+            # Net Income is negative
+            if operating_cf > 0:
+                # Loss but positive CF = turnaround potential
+                score = 60
+                logger.info(f"Q19: Loss but +CF (NI: {net_income/1e8:.1f}억, CF: {operating_cf/1e8:.1f}억, Score: {score})")
+            else:
+                # Both negative = poor quality
+                score = 20
+                logger.info(f"Q19: Both negative (NI: {net_income/1e8:.1f}억, CF: {operating_cf/1e8:.1f}억, Score: {score})")
+        else:
+            # Net Income is positive
+            accrual_ratio = operating_cf / net_income
+
+            if accrual_ratio >= 1.2:
+                score = 100  # Excellent: CF > NI significantly
+            elif accrual_ratio >= 1.0:
+                score = 90  # Very good: CF >= NI
+            elif accrual_ratio >= 0.8:
+                score = 80  # Good: Normal range
+            elif accrual_ratio >= 0.5:
+                score = 60  # Caution: Some accruals
+            elif accrual_ratio >= 0.2:
+                score = 40  # Warning: High accruals
+            elif accrual_ratio >= 0:
+                score = 25  # Poor: Very low CF
+            else:
+                score = 10  # Negative CF with positive NI = red flag
+
+            logger.info(f"Q19: Accrual (NI: {net_income/1e8:.1f}억, CF: {operating_cf/1e8:.1f}억, Ratio: {accrual_ratio:.2f}, Score: {score})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # Q20. Inventory Efficiency Change (재고효율성 변화) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_q20_inventory_efficiency(self):
+        """
+        Q20. Inventory Efficiency Change Strategy (Phase 3.8 - User Suggestion)
+
+        핵심 개념: 재고자산회전율 YoY 변화
+        - 재고자산회전율 = 매출원가 / 평균재고자산
+        - 증가 = 운영 효율성 개선 (고점수)
+        - 감소 = 재고 누적, 판매 부진 (저점수)
+
+        Score calculation:
+        1. Current turnover vs Previous turnover
+        2. Improvement = Higher score
+        3. No inventory = Neutral (서비스업 등)
+
+        Data: kr_financial_position (BS: 재고자산, CIS: 매출원가)
+        """
+        # Step 1: Get Inventory and COGS for 2 years
+        data_query = """
+        SELECT
+            bsns_year,
+            MAX(CASE WHEN sj_div = 'BS' AND account_nm LIKE '%재고자산%'
+                THEN thstrm_amount END) as inventory,
+            MAX(CASE WHEN sj_div = 'CIS' AND (account_nm LIKE '%매출원가%' OR account_nm = '매출원가')
+                THEN thstrm_amount END) as cogs
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND rcept_dt <= COALESCE($2::date, CURRENT_DATE)
+        GROUP BY bsns_year
+        ORDER BY bsns_year DESC
+        LIMIT 3
+        """
+
+        result = await self.execute_query(data_query, self.symbol, self.analysis_date)
+
+        if not result or len(result) < 2:
+            # Not enough data for comparison
+            return 50  # Neutral
+
+        # Calculate inventory turnover for each year
+        turnover_values = []
+        for row in result:
+            inventory = float(row['inventory']) if row['inventory'] else 0
+            cogs = float(row['cogs']) if row['cogs'] else 0
+
+            if inventory > 0 and cogs > 0:
+                turnover = cogs / inventory
+                turnover_values.append({
+                    'year': row['bsns_year'],
+                    'turnover': turnover
+                })
+
+        if len(turnover_values) < 2:
+            # No inventory (service company) = neutral
+            logger.info(f"Q20: No inventory data (service industry?), Score: 50")
+            return 50
+
+        # Calculate YoY change
+        current_turnover = turnover_values[0]['turnover']
+        previous_turnover = turnover_values[1]['turnover']
+
+        if previous_turnover == 0:
+            return 50  # Cannot calculate change
+
+        turnover_change_pct = ((current_turnover - previous_turnover) / previous_turnover) * 100
+
+        # Step 2: Calculate Score
+        # +20%+ improvement = 100
+        # +10% improvement = 80
+        # 0% (stable) = 60
+        # -10% deterioration = 40
+        # -20%+ deterioration = 20
+
+        if turnover_change_pct >= 20:
+            score = 100  # Significant improvement
+        elif turnover_change_pct >= 10:
+            score = 80 + (turnover_change_pct - 10) * 2
+        elif turnover_change_pct >= 0:
+            score = 60 + turnover_change_pct * 2
+        elif turnover_change_pct >= -10:
+            score = 60 + turnover_change_pct * 2  # 40-60 range
+        elif turnover_change_pct >= -20:
+            score = 40 + (turnover_change_pct + 10) * 2
+        else:
+            score = 20  # Significant deterioration
+
+        logger.info(f"Q20: Inventory (Turnover: {current_turnover:.2f} vs {previous_turnover:.2f}, Change: {turnover_change_pct:.1f}%, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # Q21. 5-Year ROA Trend (장기 수익성 추세) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_q21_roa_trend(self):
+        """
+        Q21. 5-Year ROA Trend Strategy (Phase 3.8 - QuantPedia Research)
+
+        핵심 개념: 장기 ROA 추세로 지속적 수익성 평가
+        - QuantPedia: ROA 5yr 연간 수익률 4.7%
+        - 단기 변동보다 장기 추세 중시
+        - ROA = 순이익 / 총자산
+
+        Score calculation:
+        1. 5년간 ROA 기울기 (추세)
+        2. 상승 추세 = 고점수
+        3. 하락 추세 = 저점수
+        4. 최근 ROA 레벨도 함께 고려
+
+        Data: kr_financial_position
+        """
+        # Step 1: Get 5 years of ROA data
+        roa_query = """
+        SELECT
+            bsns_year,
+            MAX(CASE WHEN sj_div IN ('CIS', 'IS') AND
+                (account_nm LIKE '%당기순이익%' OR account_nm = '당기순이익(손실)')
+                THEN thstrm_amount END) as net_income,
+            MAX(CASE WHEN sj_div = 'BS' AND
+                (account_nm LIKE '%자산총계%' OR account_nm = '자산총계')
+                THEN thstrm_amount END) as total_assets
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND rcept_dt <= COALESCE($2::date, CURRENT_DATE)
+        GROUP BY bsns_year
+        ORDER BY bsns_year DESC
+        LIMIT 5
+        """
+
+        result = await self.execute_query(roa_query, self.symbol, self.analysis_date)
+
+        if not result or len(result) < 2:
+            return None
+
+        # Calculate ROA for each year
+        roa_data = []
+        for row in result:
+            if row['net_income'] and row['total_assets'] and float(row['total_assets']) > 0:
+                roa = (float(row['net_income']) / float(row['total_assets'])) * 100
+                roa_data.append({
+                    'year': int(row['bsns_year']),
+                    'roa': roa
+                })
+
+        if len(roa_data) < 2:
+            return None
+
+        # Sort by year ascending for trend calculation
+        roa_data.sort(key=lambda x: x['year'])
+
+        # Step 2: Calculate trend (simple linear regression slope)
+        n = len(roa_data)
+        x_values = list(range(n))  # 0, 1, 2, ...
+        y_values = [d['roa'] for d in roa_data]
+
+        x_mean = sum(x_values) / n
+        y_mean = sum(y_values) / n
+
+        numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values))
+        denominator = sum((x - x_mean) ** 2 for x in x_values)
+
+        if denominator == 0:
+            slope = 0
+        else:
+            slope = numerator / denominator  # ROA change per year
+
+        # Current ROA (most recent)
+        current_roa = roa_data[-1]['roa']
+
+        # Step 3: Calculate scores
+
+        # Trend Score (60%): -2%/yr = 0, 0%/yr = 50, +2%/yr = 100
+        if slope >= 2:
+            trend_score = 100
+        elif slope <= -2:
+            trend_score = 0
+        else:
+            trend_score = 50 + (slope * 25)
+
+        # Level Score (40%): Current ROA level
+        # 0% = 0, 5% = 50, 10%+ = 100
+        if current_roa >= 10:
+            level_score = 100
+        elif current_roa <= 0:
+            level_score = 0
+        else:
+            level_score = current_roa * 10
+
+        # Base score
+        score = trend_score * 0.60 + level_score * 0.40
+
+        # Bonus: Consistently improving (all positive changes)
+        is_improving = all(roa_data[i]['roa'] <= roa_data[i+1]['roa'] for i in range(len(roa_data)-1))
+        if is_improving and len(roa_data) >= 3:
+            score = min(100, score * 1.1)  # 10% bonus
+
+        logger.info(f"Q21: ROA Trend (Current: {current_roa:.1f}%, Slope: {slope:.2f}%/yr, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+
+    # ========================================================================
     # Calculate All Quality Factor Scores
     # ========================================================================
 
     async def calculate_all_strategies(self):
         """
-        Calculate all quality factor strategies (16 strategies - Q5 REMOVED)
+        Calculate all quality factor strategies (Phase 3.8 Upgrade - 20 strategies)
 
         Q5 (Asset Efficiency) REMOVED on 2025-11-19:
         - Multiple redesign attempts failed (V1, V2, V3)
         - V2 (ROA-Centered): IC -0.0081
         - V3 (Trend-Based): IC -0.0174 (worse)
         - No predictive power across all versions
+
+        NEW Phase 3.8 Strategies (Sustainable Growth Paradigm):
+        - Q18: Sustainable Growth Rate (SGR = ROE × Retention)
+        - Q19: Accrual Quality (Operating CF / Net Income)
+        - Q20: Inventory Efficiency Change (YoY Turnover)
+        - Q21: 5-Year ROA Trend (Long-term Profitability)
 
         Returns: dict of {strategy_name: score}
         """
@@ -2001,7 +2450,12 @@ class QualityFactorCalculator:
             'Q14_Equity_Ratio': await self.calculate_q14(),
             'Q15_Operating_Profit_Continuity': await self.calculate_q15(),
             'Q16_Interest_Coverage_Ratio': await self.calculate_q16(),
-            'Q17_Operating_CF_Continuity': await self.calculate_q17()
+            'Q17_Operating_CF_Continuity': await self.calculate_q17(),
+            # NEW Phase 3.8: Sustainable Growth Paradigm
+            'Q18_Sustainable_Growth_Rate': await self.calculate_q18_sustainable_growth_rate(),
+            'Q19_Accrual_Quality': await self.calculate_q19_accrual_quality(),
+            'Q20_Inventory_Efficiency': await self.calculate_q20_inventory_efficiency(),
+            'Q21_ROA_Trend': await self.calculate_q21_roa_trend(),
         }
 
         self.strategies_scores = strategies

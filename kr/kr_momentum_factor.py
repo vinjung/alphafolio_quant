@@ -96,6 +96,52 @@ SECTOR_MULTIPLIERS = {
 }
 
 # ========================================================================
+# Momentum Disabled Themes (모멘텀 전략이 역작동하는 테마)
+# Based on IC analysis: Telecom_Media IC = 0.159 (lowest), avg return = -9.5%
+# ========================================================================
+
+MOMENTUM_DISABLED_THEMES = ['Telecom_Media']
+
+# ========================================================================
+# Volatility Regime Thresholds (시장 변동성 기반 모멘텀 조정)
+# Based on Barroso & Santa-Clara (2015) "Momentum has its Moments"
+# ========================================================================
+
+VOLATILITY_REGIME_CONFIG = {
+    'HIGH_VOL': {
+        'threshold': 1.5,  # Vol20d > 1.5%
+        'momentum_weight': 0.5,  # 모멘텀 가중치 50%로 감소
+        'description': '고변동성 - 모멘텀 크래시 위험'
+    },
+    'MED_VOL': {
+        'threshold': 1.0,  # Vol20d > 1.0%
+        'momentum_weight': 0.75,  # 모멘텀 가중치 75%
+        'description': '중변동성'
+    },
+    'LOW_VOL': {
+        'threshold': 0.0,  # Vol20d <= 1.0%
+        'momentum_weight': 1.0,  # 모멘텀 가중치 정상
+        'description': '저변동성 - 모멘텀 정상 작동'
+    }
+}
+
+# Target volatility for volatility scaling (연환산 12%)
+TARGET_VOLATILITY = 12.0
+
+# ========================================================================
+# Mean Reversion Risk Thresholds
+# Based on empirical analysis: RSI > 75 + MA20 deviation > 15% = crash risk
+# ========================================================================
+
+MEAN_REVERSION_RISK_CONFIG = {
+    'RSI_EXTREME': {'threshold': 80, 'penalty': 40},
+    'RSI_OVERBOUGHT': {'threshold': 75, 'penalty': 25},
+    'MA20_EXTREME_DEV': {'threshold': 20, 'penalty': 30},  # MA20 괴리율 20%
+    'MA20_HIGH_DEV': {'threshold': 15, 'penalty': 20},  # MA20 괴리율 15%
+    'BB_RSI_COMBO': {'rsi_threshold': 65, 'penalty': 15},  # BB 상단 + RSI > 65
+}
+
+# ========================================================================
 # Market State-based Momentum Strategy Weights (19 market states × 20 strategies)
 # Updated based on M1~M5 IC Analysis (2025-11-16)
 # Key findings: M1 (IC 0.0362) >> M4 (0.0171) > M5 (0.0078) > M3 (-0.0006) > M2 (-0.0131)
@@ -3243,13 +3289,345 @@ class MomentumFactorCalculator:
         return final_score
 
     # ========================================================================
+    # M24. Idiosyncratic Momentum (잔차 모멘텀)
+    # Based on Hanauer & Windmüller research - outperforms all other strategies
+    # ========================================================================
+
+    async def calculate_m24(self):
+        """
+        M24. Idiosyncratic Momentum Strategy
+        Description: Market/Theme effect를 제거한 종목 고유 모멘텀
+        Formula: IdioMom = 종목수익률 - 시장수익률 - 테마평균수익률
+
+        This strategy removes systematic risk factors to capture
+        stock-specific momentum that is less prone to crashes.
+
+        Based on research: Idiosyncratic momentum leads to
+        - Higher Sharpe ratio (2x improvement over other methods)
+        - Lower maximum drawdowns
+        - Better January performance
+        """
+        query = """
+        WITH stock_returns AS (
+            -- 종목의 최근 20일 수익률
+            SELECT
+                date,
+                change_rate as stock_return
+            FROM kr_intraday_total
+            WHERE symbol = $1
+                AND ($2::date IS NULL OR date <= $2)
+            ORDER BY date DESC
+            LIMIT 20
+        ),
+        stock_info AS (
+            SELECT theme, exchange
+            FROM kr_stock_detail
+            WHERE symbol = $1
+        ),
+        market_returns AS (
+            -- 시장(KOSPI/KOSDAQ) 수익률
+            SELECT m.date, m.change_rate as market_return
+            FROM market_index m, stock_info si
+            WHERE m.exchange = si.exchange
+                AND m.date IN (SELECT date FROM stock_returns)
+        ),
+        theme_returns AS (
+            -- 같은 테마 종목들의 평균 수익률
+            SELECT
+                t.date,
+                AVG(t.change_rate) as theme_return
+            FROM kr_intraday_total t
+            JOIN kr_stock_detail d ON t.symbol = d.symbol
+            JOIN stock_info si ON d.theme = si.theme
+            WHERE t.date IN (SELECT date FROM stock_returns)
+                AND t.symbol != $1
+            GROUP BY t.date
+        )
+        SELECT
+            AVG(sr.stock_return) as avg_stock_return,
+            AVG(mr.market_return) as avg_market_return,
+            AVG(tr.theme_return) as avg_theme_return,
+            AVG(sr.stock_return - COALESCE(mr.market_return, 0) - COALESCE(tr.theme_return, 0) + sr.stock_return) as idio_momentum,
+            STDDEV(sr.stock_return) as stock_volatility,
+            COUNT(*) as sample_count
+        FROM stock_returns sr
+        LEFT JOIN market_returns mr ON sr.date = mr.date
+        LEFT JOIN theme_returns tr ON sr.date = tr.date
+        """
+
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+
+        if not result or not result[0]['avg_stock_return']:
+            return None
+
+        row = result[0]
+        idio_mom = float(row['idio_momentum']) if row['idio_momentum'] else 0
+        stock_vol = float(row['stock_volatility']) if row['stock_volatility'] else 1
+        sample_count = int(row['sample_count']) if row['sample_count'] else 0
+
+        if sample_count < 10:
+            return None  # 데이터 부족
+
+        # Idiosyncratic momentum을 0-100 점수로 변환
+        # 일평균 0.5% 이상이면 100점, -0.5% 이하면 0점
+        if idio_mom >= 0.5:
+            base_score = 100
+        elif idio_mom <= -0.5:
+            base_score = 0
+        else:
+            # -0.5% ~ 0.5% 범위를 0~100으로 선형 변환
+            base_score = (idio_mom + 0.5) / 1.0 * 100
+
+        # 변동성 조정: 고변동성 종목은 신호 약화
+        if stock_vol > 5:
+            vol_adjust = 0.7
+        elif stock_vol > 3:
+            vol_adjust = 0.85
+        else:
+            vol_adjust = 1.0
+
+        final_score = min(100, max(0, base_score * vol_adjust))
+
+        return final_score
+
+    # ========================================================================
+    # M25. Volatility Scaled Momentum (변동성 스케일링 모멘텀)
+    # Based on Barroso & Santa-Clara (2015) - "Momentum has its Moments"
+    # ========================================================================
+
+    async def calculate_m25(self):
+        """
+        M25. Volatility Scaled Momentum Strategy
+        Description: 목표 변동성(12%)으로 스케일링한 모멘텀
+        Formula: VolScaledMom = RawMom × (TargetVol / RealizedVol)
+
+        Research findings:
+        - Risk of momentum is highly variable and predictable
+        - Constant volatility targeting (12%) nearly doubled Sharpe ratio
+        - Virtually eliminated momentum crashes
+        """
+        query = """
+        WITH price_data AS (
+            SELECT
+                date,
+                change_rate,
+                close,
+                LAG(close, 20) OVER (ORDER BY date) as close_20d_ago,
+                STDDEV(change_rate) OVER (ORDER BY date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW) as vol_20d
+            FROM kr_intraday_total
+            WHERE symbol = $1
+                AND ($2::date IS NULL OR date <= $2)
+            ORDER BY date DESC
+            LIMIT 30
+        )
+        SELECT
+            change_rate as latest_return,
+            close,
+            close_20d_ago,
+            vol_20d,
+            CASE
+                WHEN close_20d_ago > 0 THEN (close - close_20d_ago) / close_20d_ago * 100
+                ELSE 0
+            END as return_20d
+        FROM price_data
+        WHERE vol_20d IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 1
+        """
+
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+
+        if not result or not result[0]['vol_20d']:
+            return None
+
+        row = result[0]
+        return_20d = float(row['return_20d']) if row['return_20d'] else 0
+        vol_20d = float(row['vol_20d']) if row['vol_20d'] else 1
+
+        # 일별 변동성을 연환산 (√252)
+        annual_vol = vol_20d * (252 ** 0.5)
+
+        if annual_vol <= 0:
+            return None
+
+        # Volatility Scaling: 목표 변동성 12%
+        vol_scale = min(2.0, max(0.3, TARGET_VOLATILITY / annual_vol))
+
+        # Raw momentum (20일 수익률)을 vol-scaled로 변환
+        scaled_return = return_20d * vol_scale
+
+        # -20% ~ +20% 범위를 0~100으로 변환
+        if scaled_return >= 20:
+            score = 100
+        elif scaled_return <= -20:
+            score = 0
+        else:
+            score = (scaled_return + 20) / 40 * 100
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # M26. Mean Reversion Risk Score (평균회귀 위험 점수)
+    # Based on empirical analysis: RSI > 75 + MA20 deviation > 15% = crash risk
+    # ========================================================================
+
+    async def calculate_m26(self):
+        """
+        M26. Mean Reversion Risk Detection Strategy
+        Description: 과매수/급등 상태 탐지 및 평균회귀 위험 경고
+
+        Risk Factors:
+        - RSI > 80: 극단적 과매수 (penalty 40)
+        - RSI > 75: 과매수 (penalty 25)
+        - MA20 괴리 > 20%: 극단적 급등 (penalty 30)
+        - MA20 괴리 > 15%: 급등 (penalty 20)
+        - BB 상단 돌파 + RSI > 65: 복합 경고 (penalty 15)
+
+        Returns 100 - risk_penalty (higher score = lower risk)
+        """
+        query = """
+        WITH stock_data AS (
+            SELECT
+                t.close,
+                t.change_rate,
+                i.rsi,
+                i.real_upper_band as bb_upper,
+                i.real_middle_band as bb_mid,
+                AVG(t.close) OVER (ORDER BY t.date ROWS BETWEEN 19 PRECEDING AND CURRENT ROW) as ma20
+            FROM kr_intraday_total t
+            JOIN kr_indicators i ON t.symbol = i.symbol AND t.date = i.date
+            WHERE t.symbol = $1
+                AND ($2::date IS NULL OR t.date <= $2)
+            ORDER BY t.date DESC
+            LIMIT 1
+        )
+        SELECT
+            close,
+            rsi,
+            bb_upper,
+            ma20,
+            CASE WHEN ma20 > 0 THEN (close / ma20 - 1) * 100 ELSE 0 END as ma20_deviation,
+            CASE WHEN close > bb_upper THEN 1 ELSE 0 END as above_bb_upper
+        FROM stock_data
+        """
+
+        result = await self.execute_query(query, self.symbol, self.analysis_date)
+
+        if not result or result[0]['close'] is None:
+            return None
+
+        row = result[0]
+        rsi = float(row['rsi']) if row['rsi'] else 50
+        ma20_dev = float(row['ma20_deviation']) if row['ma20_deviation'] else 0
+        above_bb = int(row['above_bb_upper']) if row['above_bb_upper'] else 0
+
+        # Calculate risk penalty
+        risk_penalty = 0
+
+        # RSI-based risk
+        if rsi >= MEAN_REVERSION_RISK_CONFIG['RSI_EXTREME']['threshold']:
+            risk_penalty += MEAN_REVERSION_RISK_CONFIG['RSI_EXTREME']['penalty']
+        elif rsi >= MEAN_REVERSION_RISK_CONFIG['RSI_OVERBOUGHT']['threshold']:
+            risk_penalty += MEAN_REVERSION_RISK_CONFIG['RSI_OVERBOUGHT']['penalty']
+
+        # MA20 deviation risk
+        if ma20_dev >= MEAN_REVERSION_RISK_CONFIG['MA20_EXTREME_DEV']['threshold']:
+            risk_penalty += MEAN_REVERSION_RISK_CONFIG['MA20_EXTREME_DEV']['penalty']
+        elif ma20_dev >= MEAN_REVERSION_RISK_CONFIG['MA20_HIGH_DEV']['threshold']:
+            risk_penalty += MEAN_REVERSION_RISK_CONFIG['MA20_HIGH_DEV']['penalty']
+
+        # BB + RSI combo risk
+        if above_bb and rsi >= MEAN_REVERSION_RISK_CONFIG['BB_RSI_COMBO']['rsi_threshold']:
+            risk_penalty += MEAN_REVERSION_RISK_CONFIG['BB_RSI_COMBO']['penalty']
+
+        # Final score: 100 - risk_penalty (higher = safer)
+        # Max penalty = 85, so min score = 15
+        final_score = max(0, 100 - risk_penalty)
+
+        return final_score
+
+    # ========================================================================
+    # Helper: Get Market Volatility Regime
+    # ========================================================================
+
+    async def _get_market_volatility_regime(self):
+        """
+        Get current market volatility regime for regime-switching
+
+        Returns:
+            dict: {
+                'regime': 'HIGH_VOL' | 'MED_VOL' | 'LOW_VOL',
+                'vol_20d': float,
+                'momentum_weight': float (0.5 ~ 1.0)
+            }
+        """
+        query = """
+        SELECT
+            STDDEV(change_rate) as vol_20d
+        FROM (
+            SELECT change_rate
+            FROM market_index
+            WHERE exchange = 'KOSPI'
+                AND ($1::date IS NULL OR date <= $1)
+            ORDER BY date DESC
+            LIMIT 20
+        ) recent_data
+        """
+
+        result = await self.execute_query(query, self.analysis_date)
+
+        if not result or result[0]['vol_20d'] is None:
+            return {'regime': 'LOW_VOL', 'vol_20d': 1.0, 'momentum_weight': 1.0}
+
+        vol_20d = float(result[0]['vol_20d'])
+
+        if vol_20d > VOLATILITY_REGIME_CONFIG['HIGH_VOL']['threshold']:
+            regime = 'HIGH_VOL'
+            weight = VOLATILITY_REGIME_CONFIG['HIGH_VOL']['momentum_weight']
+        elif vol_20d > VOLATILITY_REGIME_CONFIG['MED_VOL']['threshold']:
+            regime = 'MED_VOL'
+            weight = VOLATILITY_REGIME_CONFIG['MED_VOL']['momentum_weight']
+        else:
+            regime = 'LOW_VOL'
+            weight = VOLATILITY_REGIME_CONFIG['LOW_VOL']['momentum_weight']
+
+        return {
+            'regime': regime,
+            'vol_20d': vol_20d,
+            'momentum_weight': weight
+        }
+
+    # ========================================================================
+    # Helper: Get Stock Theme
+    # ========================================================================
+
+    async def _get_stock_theme(self):
+        """
+        Get stock's theme from kr_stock_detail
+
+        Returns:
+            str: Theme name or None
+        """
+        query = "SELECT theme FROM kr_stock_detail WHERE symbol = $1 LIMIT 1"
+        result = await self.execute_query(query, self.symbol)
+
+        if result and result[0]['theme']:
+            return result[0]['theme']
+        return None
+
+    # ========================================================================
     # Calculate All Momentum Factor Scores
     # ========================================================================
 
     async def calculate_all_strategies(self):
         """
-        Calculate all 23 momentum factor strategies (M1-M20 + M21-M23)
+        Calculate all 26 momentum factor strategies (M1-M23 + M24-M26 new strategies)
         Returns: dict of {strategy_name: score}
+
+        New strategies (Phase 3.11):
+        - M24: Idiosyncratic Momentum (잔차 모멘텀) - Hanauer & Windmüller research
+        - M25: Volatility Scaled Momentum - Barroso & Santa-Clara (2015)
+        - M26: Mean Reversion Risk Score - 과매수/급등 위험 탐지
         """
         logger.info(f"Calculating all momentum factor strategies for {self.symbol}")
 
@@ -3276,7 +3654,11 @@ class MomentumFactorCalculator:
             'M20_ATR_Breakout': await self.calculate_m20(),
             'M21_Reserved': await self.calculate_m21(),
             'M22_Reserved': await self.calculate_m22(),
-            'M23_Market_Volatility_Regime': await self.calculate_m23()
+            'M23_Market_Volatility_Regime': await self.calculate_m23(),
+            # Phase 3.11 New Strategies (학술 연구 기반)
+            'M24_Idiosyncratic_Momentum': await self.calculate_m24(),
+            'M25_Volatility_Scaled_Momentum': await self.calculate_m25(),
+            'M26_Mean_Reversion_Risk': await self.calculate_m26()
         }
 
         self.strategies_scores = strategies
@@ -3302,33 +3684,25 @@ class MomentumFactorCalculator:
 
     async def calculate_weighted_score(self, market_state=None):
         """
-        Calculate weighted average score based on market state and sector
+        Calculate weighted average score based on market state, sector, volatility regime, and theme
+
+        Phase 3.11 Enhancements:
+        - Regime-Switching: 시장 변동성에 따른 모멘텀 가중치 조정
+        - Theme Override: Telecom_Media 등 역작동 테마 특별 처리
+        - Mean Reversion Risk: M26 점수를 활용한 위험 감산
 
         Formula:
             Base Score = Σ(Strategy Score × Weight) / Σ(Weight)
-            Final Score = Base Score × Sector Multiplier
-
-        Example (KOSPI대형-확장과열-공격형, 의복 액세서리 제조업):
-            Weights: M1=2.5, M2=0.5, M3=0.3, ..., M23=1.8
-            Scores: M1=85, M2=72, M3=65, ..., M23=68
-            Base Score = (85×2.5 + 72×0.5 + ... + 68×1.8) / Weight Sum = 72.2
-            Sector Multiplier = 1.50 (top performing sector)
-            Final Score = 72.2 × 1.50 = 108.3 → capped at 100
+            Regime Adjusted = Base Score × Regime Weight (0.5~1.0)
+            Theme Adjusted = Regime Adjusted (or 0 if disabled theme)
+            Final Score = Theme Adjusted × Sector Multiplier
 
         Args:
             market_state: Market state classification (one of 19 states)
                          If None, uses self.market_state
 
         Returns:
-            dict: {
-                'weighted_score': float (0~100, after sector multiplier),
-                'base_score': float (before sector multiplier),
-                'sector_multiplier': float (0.5~1.5),
-                'sector': str,
-                'weight_sum': float,
-                'market_state': str,
-                'valid_strategies': int
-            }
+            dict: Enhanced result with regime/theme info
             Returns None if no valid scores or weights
         """
         # Use provided market_state or instance variable
@@ -3347,6 +3721,18 @@ class MomentumFactorCalculator:
         if not self.strategies_scores:
             await self.calculate_all_strategies()
 
+        # ========================================================================
+        # Phase 3.11: Get Volatility Regime
+        # ========================================================================
+        volatility_regime = await self._get_market_volatility_regime()
+        regime_weight = volatility_regime['momentum_weight']
+
+        # ========================================================================
+        # Phase 3.11: Check Theme Override
+        # ========================================================================
+        theme = await self._get_stock_theme()
+        theme_disabled = theme in MOMENTUM_DISABLED_THEMES if theme else False
+
         # Get weights for this market state
         weights = MOMENTUM_STRATEGY_WEIGHTS.get(market_state)
 
@@ -3354,6 +3740,18 @@ class MomentumFactorCalculator:
             logger.error(f"Invalid market state: {market_state}, using '기타'")
             weights = MOMENTUM_STRATEGY_WEIGHTS['기타']
             market_state = '기타'
+
+        # ========================================================================
+        # Phase 3.11: Add default weights for new strategies M24-M26
+        # ========================================================================
+        # M24 (Idiosyncratic): High weight - best performing strategy per research
+        # M25 (Vol Scaled): Medium weight - volatility-adjusted momentum
+        # M26 (Mean Reversion Risk): Used as penalty, not direct weight
+        default_new_weights = {
+            'M24': 2.0,  # Idiosyncratic Momentum - highest weight (research backed)
+            'M25': 1.5,  # Volatility Scaled - medium-high weight
+            'M26': 0.0   # Mean Reversion Risk - not weighted, used as penalty
+        }
 
         # Calculate weighted average
         weighted_sum = 0.0
@@ -3370,7 +3768,16 @@ class MomentumFactorCalculator:
 
                 # Extract strategy key (e.g., 'M1_Price_Momentum_3M' -> 'M1')
                 strategy_key = strategy_name.split('_')[0]
-                weight = weights.get(strategy_key, 1.0)
+
+                # Get weight (check new weights first, then market state weights)
+                if strategy_key in default_new_weights:
+                    weight = default_new_weights[strategy_key]
+                else:
+                    weight = weights.get(strategy_key, 1.0)
+
+                # Skip M26 from weighted sum (it's used as penalty)
+                if strategy_key == 'M26':
+                    continue
 
                 weighted_sum += float(score) * weight
                 weight_sum += weight
@@ -3380,8 +3787,34 @@ class MomentumFactorCalculator:
         if weight_sum > 0 and valid_count > 0:
             base_weighted_score = weighted_sum / weight_sum
 
+            # ========================================================================
+            # Phase 3.11: Apply Regime-Switching
+            # ========================================================================
+            regime_adjusted_score = base_weighted_score * regime_weight
+
+            # ========================================================================
+            # Phase 3.11: Apply Theme Override
+            # ========================================================================
+            if theme_disabled:
+                # Telecom_Media and similar themes: cap momentum score at 30
+                theme_adjusted_score = min(30, regime_adjusted_score * 0.5)
+                logger.warning(f"[{self.symbol}] Theme '{theme}' momentum disabled, capped to {theme_adjusted_score:.1f}")
+            else:
+                theme_adjusted_score = regime_adjusted_score
+
+            # ========================================================================
+            # Phase 3.11: Apply Mean Reversion Risk Penalty
+            # ========================================================================
+            m26_score = self.strategies_scores.get('M26_Mean_Reversion_Risk')
+            if m26_score is not None and m26_score < 50:
+                # M26 < 50 means high risk (RSI > 75 or MA20 deviation > 15%)
+                # Apply penalty proportional to risk
+                risk_penalty = (50 - m26_score) * 0.5  # Max penalty = 25 points
+                theme_adjusted_score = max(0, theme_adjusted_score - risk_penalty)
+                logger.info(f"[{self.symbol}] Mean Reversion Risk penalty: -{risk_penalty:.1f} (M26={m26_score:.1f})")
+
             # Apply sector multiplier to get final score
-            sector_adjusted_score = base_weighted_score * sector_multiplier
+            sector_adjusted_score = theme_adjusted_score * sector_multiplier
 
             # Cap at 0-100 range
             sector_adjusted_score = min(100, max(0, sector_adjusted_score))
@@ -3396,20 +3829,30 @@ class MomentumFactorCalculator:
             sector_name = sector_result[0]['industry'] if sector_result and sector_result[0]['industry'] else 'Unknown'
 
             result = {
-                'weighted_score': round(sector_adjusted_score, 1),  # Final score with sector multiplier
-                'base_weighted_score': round(base_weighted_score, 1),  # Before sector multiplier
+                'weighted_score': round(sector_adjusted_score, 1),  # Final score with all adjustments
+                'base_weighted_score': round(base_weighted_score, 1),  # Before any adjustments
+                'regime_adjusted_score': round(regime_adjusted_score, 1),  # After regime adjustment
+                'theme_adjusted_score': round(theme_adjusted_score, 1),  # After theme adjustment
                 'simple_average': round(simple_avg, 1),  # Simple average for reference
                 'sector_multiplier': round(sector_multiplier, 2),
                 'sector': sector_name,
                 'weight_sum': round(weight_sum, 2),
                 'market_state': market_state,
                 'valid_strategies': valid_count,
+                # Phase 3.11 new fields
+                'volatility_regime': volatility_regime['regime'],
+                'volatility_20d': round(volatility_regime['vol_20d'], 3),
+                'regime_weight': regime_weight,
+                'theme': theme,
+                'theme_disabled': theme_disabled,
+                'm26_mean_reversion_risk': m26_score,
                 'strategies': self.strategies_scores
             }
 
             logger.info(f"Weighted momentum score for {self.symbol}: {sector_adjusted_score:.2f} "
-                       f"(base: {base_weighted_score:.2f}, sector: {sector_name} ×{sector_multiplier:.2f}, "
-                       f"market_state: {market_state})")
+                       f"(base: {base_weighted_score:.2f}, regime: {volatility_regime['regime']} ×{regime_weight}, "
+                       f"theme: {theme} {'[DISABLED]' if theme_disabled else ''}, "
+                       f"sector: {sector_name} ×{sector_multiplier:.2f})")
 
             return result
         else:

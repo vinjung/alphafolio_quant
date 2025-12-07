@@ -1,0 +1,74 @@
+================================================================================
+BATCH WEIGHT CALCULATOR - PERFORMANCE DIAGNOSIS REPORT
+================================================================================
+
+### SUMMARY ###
+Total time: 9.25s
+Total stocks: 2748
+Processed: 2634
+Skipped: 114
+Average per stock: 0.0034s
+
+### PHASE BREAKDOWN ###
+phase1      :    4.51s ( 48.7%)
+phase2      :    4.64s ( 50.2%)
+phase2_5    :    0.01s (  0.1%)
+phase3      :    0.08s (  0.9%)
+TOTAL       :    9.25s (100.0%)
+
+### QUERY ANALYSIS ###
+Total queries executed: 11
+Total query time: 7.80s
+
+Top 5 slowest queries:
+  1. Query 2: Combined Market Data (Latest + Liquidity + Volatility)
+     Time: 2.490s
+     Rows: 2,748
+     Memory: +2.71MB
+
+  2. Unnamed Query
+     Time: 2.234s
+     Rows: 163
+     Memory: +0.11MB
+
+  3. Query 3: Supply/Demand Data (30-day inst/foreign flows)
+     Time: 1.156s
+     Rows: 2,748
+     Memory: +1.32MB
+
+  4. Query 1: Basic Info
+     Time: 0.702s
+     Rows: 2,634
+     Memory: +1.52MB
+
+  5. Unnamed Query
+     Time: 0.197s
+     Rows: 1
+     Memory: +0.04MB
+
+### MEMORY ANALYSIS ###
+Memory progression:
+  Start               :    62.18 MB ( 0.39%)
+  After Phase 1       :    62.39 MB ( 0.40%)
+  After Phase 2       :    69.29 MB ( 0.44%)
+  After Phase 2.5     :    69.66 MB ( 0.44%)
+  After Phase 3       :    69.66 MB ( 0.44%)
+
+  Peak memory: 69.66 MB
+  Memory growth: 7.48 MB
+
+### BOTTLENECK DIAGNOSIS ###
+Slowest phase: phase2 (4.64s, 50.2%)
+WARNING: Phase 2 (data fetching) is a bottleneck (>40% of total time)
+  Possible causes:
+  - Missing database indexes (run create_indexes_optimization.sql)
+  - Slow network connection to database
+  - Large result set (consider batching)
+
+### RECOMMENDATIONS ###
+1. Database indexes may help (run kr/create_indexes_optimization.sql)
+
+Next steps:
+- Review query execution plans with EXPLAIN ANALYZE
+- Monitor index usage after running create_indexes_optimization.sql
+- Consider implementing parallel processing if Phase 3 is slow

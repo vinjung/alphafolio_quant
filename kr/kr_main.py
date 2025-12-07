@@ -315,8 +315,11 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             # Filter 4: RSI overbought filter (RSI > 70 blocks BUY)
             rsi = additional_metrics.get('rsi', 50) or 50
             rsi_not_overbought = rsi <= 70
+            # Filter 5: Entry Timing (Phase 3.10 - High Entry >= 70 for 70%+ win rate)
+            entry_timing_score = entry_timing.get('entry_timing_score', 0) if entry_timing else 0
+            entry_timing_pass = entry_timing_score >= 70
 
-            filters_passed = sum([momentum_pass, trend_pass, rs_pass, rsi_not_overbought])
+            filters_passed = sum([momentum_pass, trend_pass, rs_pass, rsi_not_overbought, entry_timing_pass])
 
             # Phase 3.9: Theme-based penalty for low IC themes
             theme = conditions.get('theme', '')
@@ -324,8 +327,9 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             theme_penalty = 5 if theme in low_ic_themes else 0
             adjusted_buy_threshold = buy_threshold + theme_penalty
 
-            # Grade determination with timing filters (4 filters, require 3+)
-            if final_score >= adjusted_buy_threshold and filters_passed >= 3:
+            # Grade determination with timing filters (5 filters, require 4+ for BUY)
+            # Phase 3.10: Entry Timing Score added (High Entry + High Score = 70%+ win rate)
+            if final_score >= adjusted_buy_threshold and filters_passed >= 4:
                 final_grade = '매수'
             elif final_score >= adjusted_buy_threshold - 5 and filters_passed >= 3:
                 final_grade = '매수 고려'
@@ -343,7 +347,7 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
                 print(f"  최종 점수: {final_score:.2f}")
                 print(f"  시장 레짐: {conditions.get('market_sentiment', 'NEUTRAL')} (Buy >= {adjusted_buy_threshold}, Sell < {sell_threshold})")
                 print(f"  테마 페널티: {theme_penalty} ({theme})")
-                print(f"  필터 통과: {filters_passed}/4 (Momentum: {momentum_pass}, Trend: {trend_pass}, RS: {rs_pass}, RSI: {rsi_not_overbought})")
+                print(f"  필터 통과: {filters_passed}/5 (Momentum: {momentum_pass}, Trend: {trend_pass}, RS: {rs_pass}, RSI: {rsi_not_overbought}, EntryTiming: {entry_timing_pass})")
             else:
                 print(f"  최종 점수: N/A (데이터 부족)")
             print(f"  투자 등급: {final_grade}\n")
@@ -720,7 +724,7 @@ async def analyze_all_stocks(db_manager):
         symbols = [row['symbol'] for row in result]
         total_count = len(symbols)
 
-        BATCH_SIZE = 40
+        BATCH_SIZE = 20
 
         print("\n" + "="*80)
         print(f"전체 종목 분석 시작 (Batch Weight 최적화)")
@@ -939,7 +943,7 @@ async def analyze_all_stocks_date_range(db_manager, start_date, end_date):
             await batch_calc.close()
 
             # Step 2: Process stocks with precomputed weights
-            BATCH_SIZE = 40
+            BATCH_SIZE = 20
             batches = [symbols[i:i + BATCH_SIZE] for i in range(0, symbol_count, BATCH_SIZE)]
 
             date_success = 0
@@ -1136,7 +1140,7 @@ async def analyze_sample_stocks_specific_dates(db_manager, sample_file='sample_s
             # Optimized for DB max_connections=100 (miss.py uses 30, kr_main uses 45)
             # Each analyze_single_stock uses ~3-5 connections sequentially
             # BATCH_SIZE=40 for stable throughput (45 pool / ~1.1 connections per stock)
-            BATCH_SIZE = 40
+            BATCH_SIZE = 20
             batches = [symbols[i:i + BATCH_SIZE] for i in range(0, len(symbols), BATCH_SIZE)]
 
             date_success = 0
@@ -1325,7 +1329,7 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
 
             # Step 2: Process stocks with precomputed weights
             # Optimized for Pro plan: DB max_connections=100, batch size=40
-            BATCH_SIZE = 40
+            BATCH_SIZE = 20
             batches = [symbols[i:i + BATCH_SIZE] for i in range(0, len(symbols), BATCH_SIZE)]
 
             date_success = 0

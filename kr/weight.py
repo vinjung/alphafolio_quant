@@ -958,12 +958,92 @@ class ConditionAnalyzer:
 
         return volatility_weights.get(volatility_level, {'all': 1.0})
 
+    async def determine_supply_demand(self):
+        """
+        Determine supply/demand condition based on institutional and foreign investor flows
+        (Phase 3.10: 수급 조건 추가)
+
+        Returns:
+            dict: Weight adjustments based on supply/demand pattern
+        """
+        query = """
+        SELECT
+            SUM(inst_net_volume) as inst_net_30d,
+            SUM(foreign_net_volume) as foreign_net_30d,
+            COUNT(*) as trading_days
+        FROM kr_individual_investor_daily_trading
+        WHERE symbol = $1
+            AND date >= CURRENT_DATE - INTERVAL '30 days'
+            AND date <= CURRENT_DATE
+        """
+
+        result = await self.execute_query(query, self.symbol)
+
+        if not result or result[0]['trading_days'] is None or result[0]['trading_days'] < 10:
+            logger.warning(f"Insufficient supply/demand data for {self.symbol}")
+            self.conditions['supply_demand'] = 'NEUTRAL'
+            return {'all': 1.0}
+
+        inst_net = result[0]['inst_net_30d'] or 0
+        foreign_net = result[0]['foreign_net_30d'] or 0
+
+        # Classify supply/demand pattern
+        if inst_net > 0 and foreign_net > 0:
+            supply_demand = 'STRONG_BUY'
+        elif inst_net > 0 and foreign_net <= 0:
+            supply_demand = 'INST_LED'
+        elif inst_net <= 0 and foreign_net > 0:
+            supply_demand = 'FOREIGN_LED'
+        elif inst_net < 0 and foreign_net < 0:
+            supply_demand = 'STRONG_SELL'
+        else:
+            supply_demand = 'NEUTRAL'
+
+        self.conditions['supply_demand'] = supply_demand
+        self.conditions['inst_net_30d'] = inst_net
+        self.conditions['foreign_net_30d'] = foreign_net
+
+        logger.info(f"Supply/Demand: {supply_demand} (inst={inst_net:,}, foreign={foreign_net:,})")
+
+        # Supply/demand weight adjustments
+        supply_demand_weights = {
+            'STRONG_BUY': {
+                'momentum': 1.3,
+                'growth': 1.2,
+                'value': 0.8,
+                'quality': 0.9
+            },
+            'INST_LED': {
+                'quality': 1.2,
+                'value': 1.1,
+                'momentum': 0.9,
+                'growth': 0.9
+            },
+            'FOREIGN_LED': {
+                'momentum': 1.2,
+                'growth': 1.1,
+                'value': 0.9,
+                'quality': 0.9
+            },
+            'STRONG_SELL': {
+                'quality': 1.3,
+                'value': 1.2,
+                'momentum': 0.7,
+                'growth': 0.8
+            },
+            'NEUTRAL': {
+                'all': 1.0
+            }
+        }
+
+        return supply_demand_weights.get(supply_demand, {'all': 1.0})
+
     async def analyze(self):
-        """Execute all 8 condition analyses"""
+        """Execute all 9 condition analyses (Phase 3.10: 수급 조건 추가)"""
         logger.info(f"\n=== Starting analysis for symbol: {self.symbol} ===\n")
 
         try:
-            # Execute all 8 condition determinations
+            # Execute all 9 condition determinations
             self.condition_weights.append(await self.determine_market_type())
             self.condition_weights.append(await self.determine_market_cap())
             self.condition_weights.append(await self.determine_liquidity())
@@ -972,8 +1052,9 @@ class ConditionAnalyzer:
             self.condition_weights.append(await self.determine_sector_cycle())
             self.condition_weights.append(await self.determine_theme_classification())
             self.condition_weights.append(await self.determine_volatility_level())
+            self.condition_weights.append(await self.determine_supply_demand())  # Phase 3.10
 
-            logger.info("All conditions analyzed successfully")
+            logger.info("All conditions analyzed successfully (9 conditions)")
 
             # Classify market state (19 classifications)
             classifier = MarketClassifier()

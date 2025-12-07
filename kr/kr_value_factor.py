@@ -41,89 +41,109 @@ logger = logging.getLogger(__name__)
 
 VALUE_STRATEGY_WEIGHTS = {
     # Large Cap Group (6)
+    # V27-V30: Phase 3.8 Shareholder Value Paradigm - Higher weights in defensive/stable states
     'KOSPI대형-확장과열-공격형': {
         'V2': 0.5, 'V3': 1.2, 'V4': 0.8, 'V13': 0.8, 'V14': 0.9,
-        'V21': 0.8, 'V22': 0.6, 'V23': 0.5, 'V24': 1.0, 'V25': 0.7, 'V26': 1.2
+        'V21': 0.8, 'V22': 0.6, 'V23': 0.5, 'V24': 1.0, 'V25': 0.7, 'V26': 1.2,
+        'V27': 0.8, 'V28': 1.2, 'V29': 0.6, 'V30': 0.9  # Phase 3.8
     },
     'KOSPI대형-확장중립-성장형': {
         'V2': 1.2, 'V3': 1.5, 'V4': 1.3, 'V13': 1.5, 'V14': 1.4,
-        'V21': 1.0, 'V22': 1.0, 'V23': 0.8, 'V24': 1.2, 'V25': 0.9, 'V26': 1.3
+        'V21': 1.0, 'V22': 1.0, 'V23': 0.8, 'V24': 1.2, 'V25': 0.9, 'V26': 1.3,
+        'V27': 1.3, 'V28': 1.4, 'V29': 1.0, 'V30': 1.2  # Phase 3.8
     },
     'KOSPI대형-둔화공포-방어형': {
         'V2': 2.0, 'V3': 1.8, 'V4': 2.0, 'V13': 1.7, 'V14': 2.0,
-        'V21': 1.5, 'V22': 1.8, 'V23': 1.3, 'V24': 0.8, 'V25': 1.6, 'V26': 1.0
+        'V21': 1.5, 'V22': 1.8, 'V23': 1.3, 'V24': 0.8, 'V25': 1.6, 'V26': 1.0,
+        'V27': 2.0, 'V28': 1.8, 'V29': 1.5, 'V30': 1.8  # Phase 3.8: 방어형에서 주주환원 중시
     },
     'KOSPI대형-침체패닉-초방어형': {
         'V2': 2.0, 'V3': 2.0, 'V4': 2.0, 'V13': 1.8, 'V14': 2.0,
-        'V21': 1.8, 'V22': 2.0, 'V23': 1.5, 'V24': 0.6, 'V25': 2.0, 'V26': 0.8
+        'V21': 1.8, 'V22': 2.0, 'V23': 1.5, 'V24': 0.6, 'V25': 2.0, 'V26': 0.8,
+        'V27': 2.0, 'V28': 2.0, 'V29': 1.8, 'V30': 2.0  # Phase 3.8: 초방어형 최대 가중치
     },
     'KOSPI대형-회복탐욕-밸류형': {
         'V2': 1.7, 'V3': 1.6, 'V4': 1.5, 'V13': 1.8, 'V14': 1.6,
-        'V21': 1.3, 'V22': 1.5, 'V23': 1.2, 'V24': 1.2, 'V25': 1.4, 'V26': 1.5
+        'V21': 1.3, 'V22': 1.5, 'V23': 1.2, 'V24': 1.2, 'V25': 1.4, 'V26': 1.5,
+        'V27': 1.6, 'V28': 1.5, 'V29': 1.2, 'V30': 1.5  # Phase 3.8
     },
     'KOSPI대형-중립안정-균형형': {
         'V2': 1.3, 'V3': 1.4, 'V4': 1.5, 'V13': 1.4, 'V14': 1.5,
-        'V21': 1.0, 'V22': 1.2, 'V23': 1.0, 'V24': 1.0, 'V25': 1.0, 'V26': 1.0
+        'V21': 1.0, 'V22': 1.2, 'V23': 1.0, 'V24': 1.0, 'V25': 1.0, 'V26': 1.0,
+        'V27': 1.5, 'V28': 1.3, 'V29': 1.0, 'V30': 1.4  # Phase 3.8
     },
 
     # Mid Cap Group (6)
     'KOSPI중형-확장과열-모멘텀형': {
         'V2': 0.7, 'V3': 1.0, 'V4': 0.5, 'V13': 1.0, 'V14': 0.6,
-        'V21': 0.7, 'V22': 0.5, 'V23': 0.5, 'V24': 1.1, 'V25': 0.6, 'V26': 1.3
+        'V21': 0.7, 'V22': 0.5, 'V23': 0.5, 'V24': 1.1, 'V25': 0.6, 'V26': 1.3,
+        'V27': 0.6, 'V28': 1.0, 'V29': 0.5, 'V30': 0.7  # Phase 3.8: 모멘텀형 낮은 가중치
     },
     'KOSPI중형-회복중립-성장형': {
         'V2': 1.5, 'V3': 1.4, 'V4': 1.0, 'V13': 1.6, 'V14': 1.2,
-        'V21': 1.2, 'V22': 1.0, 'V23': 0.9, 'V24': 1.3, 'V25': 1.0, 'V26': 1.4
+        'V21': 1.2, 'V22': 1.0, 'V23': 0.9, 'V24': 1.3, 'V25': 1.0, 'V26': 1.4,
+        'V27': 1.2, 'V28': 1.3, 'V29': 0.9, 'V30': 1.1  # Phase 3.8
     },
     'KOSPI중형-둔화공포-혼조형': {
         'V2': 1.6, 'V3': 1.5, 'V4': 1.3, 'V13': 1.5, 'V14': 1.4,
-        'V21': 1.4, 'V22': 1.5, 'V23': 1.2, 'V24': 0.9, 'V25': 1.4, 'V26': 1.1
+        'V21': 1.4, 'V22': 1.5, 'V23': 1.2, 'V24': 0.9, 'V25': 1.4, 'V26': 1.1,
+        'V27': 1.5, 'V28': 1.6, 'V29': 1.3, 'V30': 1.4  # Phase 3.8
     },
     'KOSDAQ중형-확장탐욕-공격성장형': {
         'V2': 0.5, 'V3': 0.8, 'V4': 0.3, 'V13': 0.8, 'V14': 0.4,
-        'V21': 0.6, 'V22': 0.4, 'V23': 0.4, 'V24': 1.2, 'V25': 0.5, 'V26': 1.5
+        'V21': 0.6, 'V22': 0.4, 'V23': 0.4, 'V24': 1.2, 'V25': 0.5, 'V26': 1.5,
+        'V27': 0.4, 'V28': 0.9, 'V29': 0.5, 'V30': 0.6  # Phase 3.8: 공격성장형 낮은 가중치
     },
     'KOSDAQ중형-회복중립-성장테마형': {
         'V2': 1.0, 'V3': 1.2, 'V4': 0.5, 'V13': 1.3, 'V14': 0.6,
-        'V21': 1.0, 'V22': 0.7, 'V23': 0.8, 'V24': 1.3, 'V25': 0.8, 'V26': 1.4
+        'V21': 1.0, 'V22': 0.7, 'V23': 0.8, 'V24': 1.3, 'V25': 0.8, 'V26': 1.4,
+        'V27': 0.7, 'V28': 1.1, 'V29': 0.8, 'V30': 0.9  # Phase 3.8
     },
     'KOSDAQ중형-침체공포-역발상형': {
         'V2': 1.8, 'V3': 1.7, 'V4': 1.0, 'V13': 1.6, 'V14': 0.8,
-        'V21': 1.6, 'V22': 1.3, 'V23': 1.4, 'V24': 0.7, 'V25': 1.7, 'V26': 0.9
+        'V21': 1.6, 'V22': 1.3, 'V23': 1.4, 'V24': 0.7, 'V25': 1.7, 'V26': 0.9,
+        'V27': 1.4, 'V28': 1.8, 'V29': 1.4, 'V30': 1.5  # Phase 3.8
     },
 
-    # Small Cap Group (4)
+    # Small Cap Group (4) - 소형주는 주주환원보다 성장 중시
     'KOSDAQ소형-핫섹터-초고위험형': {
         'V2': 0.3, 'V3': 0.5, 'V4': 0.1, 'V13': 0.6, 'V14': 0.2,
-        'V21': 0.5, 'V22': 0.3, 'V23': 0.3, 'V24': 1.3, 'V25': 0.4, 'V26': 1.5
+        'V21': 0.5, 'V22': 0.3, 'V23': 0.3, 'V24': 1.3, 'V25': 0.4, 'V26': 1.5,
+        'V27': 0.3, 'V28': 0.8, 'V29': 0.4, 'V30': 0.5  # Phase 3.8: 소형 핫섹터 최저
     },
     'KOSDAQ소형-성장테마-고위험형': {
         'V2': 0.5, 'V3': 0.7, 'V4': 0.2, 'V13': 0.8, 'V14': 0.3,
-        'V21': 0.6, 'V22': 0.4, 'V23': 0.4, 'V24': 1.2, 'V25': 0.5, 'V26': 1.4
+        'V21': 0.6, 'V22': 0.4, 'V23': 0.4, 'V24': 1.2, 'V25': 0.5, 'V26': 1.4,
+        'V27': 0.4, 'V28': 0.9, 'V29': 0.5, 'V30': 0.6  # Phase 3.8
     },
     'KOSDAQ소형-침체-극단역발상형': {
         'V2': 1.8, 'V3': 1.5, 'V4': 0.5, 'V13': 1.4, 'V14': 0.3,
-        'V21': 1.7, 'V22': 1.0, 'V23': 1.5, 'V24': 0.6, 'V25': 1.8, 'V26': 0.7
+        'V21': 1.7, 'V22': 1.0, 'V23': 1.5, 'V24': 0.6, 'V25': 1.8, 'V26': 0.7,
+        'V27': 1.0, 'V28': 1.7, 'V29': 1.3, 'V30': 1.2  # Phase 3.8
     },
     'KOSDAQ소형-회복-모멘텀형': {
         'V2': 1.0, 'V3': 1.0, 'V4': 0.3, 'V13': 1.2, 'V14': 0.4,
-        'V21': 1.0, 'V22': 0.6, 'V23': 0.8, 'V24': 1.3, 'V25': 0.8, 'V26': 1.4
+        'V21': 1.0, 'V22': 0.6, 'V23': 0.8, 'V24': 1.3, 'V25': 0.8, 'V26': 1.4,
+        'V27': 0.5, 'V28': 1.0, 'V29': 0.7, 'V30': 0.8  # Phase 3.8
     },
 
     # Special Situation Group (2)
     '전시장-극저유동성-고위험형': {
         'V2': 1.5, 'V3': 2.0, 'V4': 1.8, 'V13': 1.3, 'V14': 1.5,
-        'V21': 1.5, 'V22': 1.6, 'V23': 1.3, 'V24': 0.7, 'V25': 1.8, 'V26': 0.8
+        'V21': 1.5, 'V22': 1.6, 'V23': 1.3, 'V24': 0.7, 'V25': 1.8, 'V26': 0.8,
+        'V27': 1.8, 'V28': 1.6, 'V29': 1.5, 'V30': 1.7  # Phase 3.8: 저유동성에서 안전 중시
     },
     '테마특화-모멘텀폭발형': {
         'V2': 0.3, 'V3': 0.6, 'V4': 0.2, 'V13': 0.7, 'V14': 0.3,
-        'V21': 0.5, 'V22': 0.3, 'V23': 0.4, 'V24': 1.3, 'V25': 0.4, 'V26': 1.5
+        'V21': 0.5, 'V22': 0.3, 'V23': 0.4, 'V24': 1.3, 'V25': 0.4, 'V26': 1.5,
+        'V27': 0.3, 'V28': 0.7, 'V29': 0.4, 'V30': 0.5  # Phase 3.8: 테마폭발 최저
     },
 
     # Others (fallback)
     '기타': {
         'V2': 1.0, 'V3': 1.0, 'V4': 1.0, 'V13': 1.0, 'V14': 1.0,
-        'V21': 1.0, 'V22': 1.0, 'V23': 1.0, 'V24': 1.0, 'V25': 1.0, 'V26': 1.0
+        'V21': 1.0, 'V22': 1.0, 'V23': 1.0, 'V24': 1.0, 'V25': 1.0, 'V26': 1.0,
+        'V27': 1.0, 'V28': 1.0, 'V29': 1.0, 'V30': 1.0  # Phase 3.8
     }
 }
 
@@ -193,29 +213,30 @@ class ValueFactorCalculator:
 
         sector = sector_result[0]['theme']
 
-        # Step 2: 섹터 30일 수익률
+        # Step 2: 섹터 30일 수익률 (Window Function 사용 - 성능 최적화)
         sector_return_query = """
-        WITH sector_stocks AS (
-            SELECT symbol
-            FROM kr_stock_detail
-            WHERE theme = $1
-        ),
-        sector_returns AS (
+        WITH sector_price_data AS (
             SELECT
-                AVG(
-                    (current_price.close - past_price.close) / NULLIF(past_price.close, 0) * 100
-                ) as avg_return_30d
-            FROM sector_stocks ss
-            JOIN kr_intraday_total current_price ON ss.symbol = current_price.symbol
-            JOIN kr_intraday_total past_price
-                ON ss.symbol = past_price.symbol
-                AND past_price.date <= COALESCE($2::date, CURRENT_DATE) - INTERVAL '30 days'
-            WHERE ($2::date IS NULL OR current_price.date = $2)
-                AND current_price.close IS NOT NULL
-                AND past_price.close IS NOT NULL
+                kit.symbol,
+                kit.date,
+                kit.close as current_close,
+                LAG(kit.close, 21) OVER (
+                    PARTITION BY kit.symbol
+                    ORDER BY kit.date
+                ) as past_close
+            FROM kr_intraday_total kit
+            JOIN kr_stock_detail sd ON kit.symbol = sd.symbol
+            WHERE sd.theme = $1
+              AND kit.date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '60 days'
+              AND kit.close IS NOT NULL
         )
-        SELECT avg_return_30d
-        FROM sector_returns
+        SELECT
+            AVG(
+                (current_close - past_close) / NULLIF(past_close, 0) * 100
+            ) as avg_return_30d
+        FROM sector_price_data
+        WHERE date = COALESCE($2::date, CURRENT_DATE)
+          AND past_close IS NOT NULL
         """
 
         sector_return_result = await self.execute_query(sector_return_query, sector, self.analysis_date)
@@ -226,24 +247,30 @@ class ValueFactorCalculator:
 
         sector_return_30d = float(sector_return_result[0]['avg_return_30d'])
 
-        # Step 3: 시장 전체 30일 수익률
+        # Step 3: 시장 전체 30일 수익률 (Window Function 사용 - 성능 최적화)
         market_return_query = """
-        WITH market_returns AS (
+        WITH market_price_data AS (
             SELECT
-                AVG(
-                    (current_price.close - past_price.close) / NULLIF(past_price.close, 0) * 100
-                ) as avg_return_30d
-            FROM kr_intraday_total current_price
-            JOIN kr_intraday_total past_price
-                ON current_price.symbol = past_price.symbol
-                AND past_price.date <= COALESCE($1::date, CURRENT_DATE) - INTERVAL '30 days'
-            WHERE ($1::date IS NULL OR current_price.date = $1)
-                AND current_price.close IS NOT NULL
-                AND past_price.close IS NOT NULL
-                AND current_price.market_cap > 100000000000  -- 1천억 이상만
+                kit.symbol,
+                kit.date,
+                kit.close as current_close,
+                kit.market_cap,
+                LAG(kit.close, 21) OVER (
+                    PARTITION BY kit.symbol
+                    ORDER BY kit.date
+                ) as past_close
+            FROM kr_intraday_total kit
+            WHERE kit.date >= COALESCE($1::date, CURRENT_DATE) - INTERVAL '60 days'
+              AND kit.close IS NOT NULL
+              AND kit.market_cap > 100000000000  -- 1천억 이상만
         )
-        SELECT avg_return_30d
-        FROM market_returns
+        SELECT
+            AVG(
+                (current_close - past_close) / NULLIF(past_close, 0) * 100
+            ) as avg_return_30d
+        FROM market_price_data
+        WHERE date = COALESCE($1::date, CURRENT_DATE)
+          AND past_close IS NOT NULL
         """
 
         market_return_result = await self.execute_query(market_return_query, self.analysis_date)
@@ -4325,6 +4352,537 @@ class ValueFactorCalculator:
 
         return min(100, max(0, score))
 
+    # ========================================================================
+    # V27. Total Shareholder Return (총주주수익률) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_v27_total_shareholder_return(self):
+        """
+        V27. Total Shareholder Return Strategy (Phase 3.8 - Paradigm Shift)
+
+        핵심 개념: "저평가"가 아닌 "주주환원" 중심 가치 평가
+        - 한국 시장의 코리아 디스카운트는 낮은 주주환원에서 기인
+        - Value-Up 프로그램 정신 반영: 배당 + 자사주매입 = 총주주수익률
+
+        Score calculation:
+        1. Dividend Yield (40%): 현금배당수익률
+        2. Treasury Stock Buyback Rate (35%): 자사주매입금액 / 시가총액
+        3. Payout Consistency (25%): 연속 배당 년수
+
+        Condition:
+        - 최근 배당 or 자사주매입 실적이 있어야 함
+        - 둘 다 있으면 보너스
+
+        Data: kr_stock_dividends, kr_treasury_stocks, kr_intraday_total
+        """
+        # Step 1: Get current market cap and price
+        market_query = """
+        SELECT market_cap, close as current_price
+        FROM kr_intraday_total
+        WHERE symbol = $1
+            AND ($2::date IS NULL OR date <= $2)
+        ORDER BY date DESC
+        LIMIT 1
+        """
+
+        market_result = await self.execute_query(market_query, self.symbol, self.analysis_date)
+
+        if not market_result or not market_result[0]['market_cap']:
+            return None
+
+        market_cap = float(market_result[0]['market_cap'])
+        current_price = float(market_result[0]['current_price']) if market_result[0]['current_price'] else 0
+
+        if market_cap <= 0:
+            return None
+
+        # Step 2: Get dividend data from kr_intraday_total (real-time dividend data)
+        dividend_query = """
+        SELECT
+            dps as cash_dividend_per_share,
+            dividend_yield
+        FROM kr_intraday_total
+        WHERE symbol = $1
+            AND date <= COALESCE($2::date, CURRENT_DATE)
+            AND dps IS NOT NULL AND dps > 0
+        ORDER BY date DESC
+        LIMIT 1
+        """
+
+        dividend_result = await self.execute_query(dividend_query, self.symbol, self.analysis_date)
+
+        dividend_yield = 0.0
+        consecutive_dividend_years = 0
+
+        if dividend_result:
+            # Latest dividend yield from kr_intraday_total
+            if dividend_result[0]['dividend_yield']:
+                dividend_yield = float(dividend_result[0]['dividend_yield'])
+            elif dividend_result[0]['cash_dividend_per_share'] and current_price > 0:
+                dividend_yield = (float(dividend_result[0]['cash_dividend_per_share']) / current_price) * 100
+
+            # If dividend exists, assume at least 1 year of consecutive dividends
+            if dividend_yield > 0:
+                consecutive_dividend_years = 1
+
+        # Step 3: Get treasury stock buyback data from kr_stockacquisitiondisposal
+        # Uses change_qy_acqs (acquired quantity) as proxy for buyback activity
+        treasury_query = """
+        SELECT
+            SUM(change_qy_acqs) as total_buyback_volume
+        FROM kr_stockacquisitiondisposal
+        WHERE symbol = $1
+            AND stlm_dt >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '2 years'
+            AND stlm_dt <= COALESCE($2::date, CURRENT_DATE)
+            AND change_qy_acqs > 0
+        """
+
+        treasury_result = await self.execute_query(treasury_query, self.symbol, self.analysis_date)
+
+        buyback_rate = 0.0
+        has_buyback = False
+
+        # Note: kr_stockacquisitiondisposal only has volume, not amount
+        # If company has buyback activity, give a moderate score
+        if treasury_result and treasury_result[0]['total_buyback_volume']:
+            buyback_volume = float(treasury_result[0]['total_buyback_volume'])
+            if buyback_volume > 0:
+                # Estimate buyback rate based on volume vs listed shares
+                # Use a proxy: if any buyback exists, assume 1% rate (moderate activity)
+                buyback_rate = 1.0  # Base rate for having buyback activity
+                has_buyback = True
+
+        # Step 4: Calculate component scores
+
+        # Dividend Yield Score (40%): 0% = 0, 3% = 70, 5%+ = 100
+        if dividend_yield >= 5.0:
+            dividend_score = 100
+        elif dividend_yield <= 0:
+            dividend_score = 0
+        else:
+            dividend_score = min(100, dividend_yield * 20)
+
+        # Treasury Buyback Score (35%): 0% = 0, 1% = 70, 2%+ = 100
+        if buyback_rate >= 2.0:
+            buyback_score = 100
+        elif buyback_rate <= 0:
+            buyback_score = 0
+        else:
+            buyback_score = min(100, buyback_rate * 50)
+
+        # Payout Consistency Score (25%): 0년 = 0, 1년 = 50, 2년 = 80, 3년+ = 100
+        if consecutive_dividend_years >= 3:
+            consistency_score = 100
+        elif consecutive_dividend_years == 2:
+            consistency_score = 80
+        elif consecutive_dividend_years == 1:
+            consistency_score = 50
+        else:
+            consistency_score = 0
+
+        # Base score
+        score = dividend_score * 0.40 + buyback_score * 0.35 + consistency_score * 0.25
+
+        # Bonus: Both dividend AND buyback = +15%
+        has_dividend = dividend_yield > 0
+        if has_dividend and has_buyback:
+            score = min(100, score * 1.15)
+            logger.info(f"V27: FULL Shareholder Return! (Div: {dividend_yield:.2f}%, Buyback: {buyback_rate:.2f}%, Score: {score:.1f})")
+        elif has_dividend or has_buyback:
+            logger.info(f"V27: Partial Shareholder Return (Div: {dividend_yield:.2f}%, Buyback: {buyback_rate:.2f}%, Score: {score:.1f})")
+        else:
+            # No shareholder return = heavy penalty
+            score = score * 0.5
+            logger.info(f"V27: No Shareholder Return (Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # V28. Value Trap Filter (가치함정 회피) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_v28_value_trap_filter(self):
+        """
+        V28. Value Trap Filter Strategy (Phase 3.8 - Paradigm Shift)
+
+        핵심 개념: 한국 시장의 "싸면 더 싸지는" 가치함정 회피
+        - 3년 연속 PBR < 0.5 + ROE < 5% = 구조적 저평가 (함정)
+        - 단순 저PBR이 아닌, 저평가 해소 가능성 평가
+
+        Score calculation:
+        1. PBR Level Check: 3년 평균 PBR (역상관)
+        2. ROE Trend: 3년간 ROE 추세 (개선 = 고점수)
+        3. Value Trap Detection: PBR < 0.5 + ROE < 5% = 패널티
+
+        Logic:
+        - 저PBR + 고ROE = 진정한 저평가 (고점수)
+        - 저PBR + 저ROE = 가치함정 (저점수)
+        - 고PBR + 고ROE = 성장주 (중간)
+        - 고PBR + 저ROE = 고평가 (저점수)
+
+        Data: kr_intraday_total, kr_financial_position
+        """
+        # Step 1: Get 3-year PBR history
+        pbr_query = """
+        SELECT
+            EXTRACT(YEAR FROM date) as year,
+            AVG(pbr) as avg_pbr
+        FROM kr_intraday_total
+        WHERE symbol = $1
+            AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '3 years'
+            AND date <= COALESCE($2::date, CURRENT_DATE)
+            AND pbr > 0
+        GROUP BY EXTRACT(YEAR FROM date)
+        ORDER BY year DESC
+        LIMIT 3
+        """
+
+        pbr_result = await self.execute_query(pbr_query, self.symbol, self.analysis_date)
+
+        if not pbr_result:
+            return None
+
+        pbr_values = [float(row['avg_pbr']) for row in pbr_result if row['avg_pbr']]
+        if not pbr_values:
+            return None
+
+        avg_pbr_3yr = sum(pbr_values) / len(pbr_values)
+        current_pbr = pbr_values[0] if pbr_values else avg_pbr_3yr
+
+        # Step 2: Get 3-year ROE data
+        roe_query = """
+        SELECT
+            bsns_year,
+            MAX(CASE WHEN account_nm LIKE '%당기순이익%' OR account_nm = '당기순이익(손실)'
+                THEN thstrm_amount END) as net_income,
+            MAX(CASE WHEN account_nm LIKE '%자본총계%' OR account_nm = '자본총계'
+                THEN thstrm_amount END) as total_equity
+        FROM kr_financial_position
+        WHERE symbol = $1
+            AND sj_div IN ('CIS', 'BS')
+            AND bsns_year >= EXTRACT(YEAR FROM COALESCE($2::date, CURRENT_DATE)) - 3
+        GROUP BY bsns_year
+        ORDER BY bsns_year DESC
+        LIMIT 3
+        """
+
+        roe_result = await self.execute_query(roe_query, self.symbol, self.analysis_date)
+
+        roe_values = []
+        if roe_result:
+            for row in roe_result:
+                if row['net_income'] and row['total_equity'] and float(row['total_equity']) > 0:
+                    roe = (float(row['net_income']) / float(row['total_equity'])) * 100
+                    roe_values.append(roe)
+
+        avg_roe_3yr = sum(roe_values) / len(roe_values) if roe_values else 0
+        current_roe = roe_values[0] if roe_values else 0
+
+        # Step 3: ROE Trend (improvement = positive)
+        roe_trend = 0
+        if len(roe_values) >= 2:
+            roe_trend = roe_values[0] - roe_values[-1]  # Most recent - oldest
+
+        # Step 4: Value Trap Detection
+        is_value_trap = False
+        if avg_pbr_3yr < 0.5 and avg_roe_3yr < 5:
+            is_value_trap = True
+
+        is_genuine_value = False
+        if current_pbr < 1.0 and current_roe >= 10:
+            is_genuine_value = True
+
+        # Step 5: Calculate component scores
+
+        # ROE Score (50%): 0% = 0, 10% = 70, 20%+ = 100
+        if current_roe >= 20:
+            roe_score = 100
+        elif current_roe <= 0:
+            roe_score = 0
+        else:
+            roe_score = min(100, current_roe * 5)
+
+        # ROE Trend Score (30%): -5% = 0, 0% = 50, +5%+ = 100
+        if roe_trend >= 5:
+            trend_score = 100
+        elif roe_trend <= -5:
+            trend_score = 0
+        else:
+            trend_score = 50 + (roe_trend * 10)
+
+        # PBR Reasonability Score (20%): Inverted U-shape
+        # Too low (< 0.3) or too high (> 3) = risky
+        if 0.5 <= current_pbr <= 1.5:
+            pbr_score = 100  # Sweet spot
+        elif current_pbr < 0.3:
+            pbr_score = 30  # Potential value trap
+        elif current_pbr < 0.5:
+            pbr_score = 60  # Caution
+        elif current_pbr <= 2.0:
+            pbr_score = 80  # Acceptable
+        elif current_pbr <= 3.0:
+            pbr_score = 50  # Expensive
+        else:
+            pbr_score = 20  # Very expensive
+
+        # Base score
+        score = roe_score * 0.50 + trend_score * 0.30 + pbr_score * 0.20
+
+        # Value Trap Penalty: -30%
+        if is_value_trap:
+            score = score * 0.7
+            logger.info(f"V28: VALUE TRAP DETECTED! (PBR: {avg_pbr_3yr:.2f}, ROE: {avg_roe_3yr:.1f}%, Score: {score:.1f})")
+        # Genuine Value Bonus: +20%
+        elif is_genuine_value:
+            score = min(100, score * 1.2)
+            logger.info(f"V28: Genuine Value! (PBR: {current_pbr:.2f}, ROE: {current_roe:.1f}%, Score: {score:.1f})")
+        else:
+            logger.info(f"V28: Neutral (PBR: {current_pbr:.2f}, ROE: {current_roe:.1f}%, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # V29. Accounting Freshness (회계 시의성) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_v29_accounting_freshness(self):
+        """
+        V29. Accounting Freshness Strategy (Phase 3.8 - User Suggestion)
+
+        핵심 개념: 한국 시장 회계 시차 문제 반영
+        - 분기보고서 미공시 시 패널티 (10-25% 차감)
+        - 최신 재무정보가 없으면 신뢰도 하락
+
+        Score calculation:
+        1. Report Timeliness: 최근 분기보고서 공시 여부
+        2. Data Completeness: 주요 재무항목 완성도
+
+        report_code:
+        - 11011: 1분기보고서
+        - 11012: 반기보고서
+        - 11013: 3분기보고서
+        - 11014: 사업보고서 (연간)
+
+        Data: kr_financial_position
+        """
+        # Step 1: Check most recent report
+        report_query = """
+        SELECT
+            report_code,
+            bsns_year,
+            rcept_dt,
+            COUNT(DISTINCT account_nm) as item_count
+        FROM kr_financial_position
+        WHERE symbol = $1
+        GROUP BY report_code, bsns_year, rcept_dt
+        ORDER BY rcept_dt DESC
+        LIMIT 4
+        """
+
+        report_result = await self.execute_query(report_query, self.symbol)
+
+        if not report_result:
+            return None
+
+        # Get current date context
+        from datetime import datetime
+        analysis_date = self.analysis_date if self.analysis_date else datetime.now().date()
+        current_year = analysis_date.year
+        current_quarter = (analysis_date.month - 1) // 3 + 1
+
+        # Expected report code based on current date
+        expected_reports = {
+            1: '11014',  # Q1: Should have annual report from prev year
+            2: '11011',  # Q2: Should have Q1 report
+            3: '11012',  # Q3: Should have semi-annual report
+            4: '11013',  # Q4: Should have Q3 report
+        }
+        expected_report = expected_reports.get(current_quarter, '11014')
+
+        # Check latest report
+        latest_report = report_result[0]
+        latest_report_code = latest_report['report_code']
+        latest_report_date = latest_report['rcept_dt']
+        item_count = int(latest_report['item_count'])
+
+        # Calculate days since last report
+        if latest_report_date:
+            days_since_report = (analysis_date - latest_report_date).days if hasattr(latest_report_date, '__sub__') else 0
+        else:
+            days_since_report = 365  # Default to 1 year if unknown
+
+        # Step 2: Calculate Timeliness Score (60%)
+        # Report within 90 days = 100, 180 days = 50, 365+ days = 0
+        if days_since_report <= 90:
+            timeliness_score = 100
+        elif days_since_report <= 180:
+            timeliness_score = 100 - ((days_since_report - 90) / 90) * 50
+        elif days_since_report <= 365:
+            timeliness_score = 50 - ((days_since_report - 180) / 185) * 50
+        else:
+            timeliness_score = 0
+
+        # Step 3: Calculate Completeness Score (40%)
+        # Expected items: BS ~30, CIS ~20, CF ~10 = ~60 items
+        if item_count >= 50:
+            completeness_score = 100
+        elif item_count >= 30:
+            completeness_score = 70 + (item_count - 30) * 1.5
+        elif item_count >= 10:
+            completeness_score = 30 + (item_count - 10) * 2
+        else:
+            completeness_score = item_count * 3
+
+        # Base score
+        score = timeliness_score * 0.60 + completeness_score * 0.40
+
+        # Penalty for very stale data (> 6 months)
+        if days_since_report > 180:
+            score = score * 0.85  # 15% penalty
+            logger.info(f"V29: STALE DATA ({days_since_report} days old, Score: {score:.1f})")
+        elif days_since_report > 90:
+            score = score * 0.95  # 5% penalty
+            logger.info(f"V29: Slightly outdated ({days_since_report} days, Score: {score:.1f})")
+        else:
+            logger.info(f"V29: Fresh data ({days_since_report} days, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
+    # ========================================================================
+    # V30. Governance Quality (지배구조 품질) - Phase 3.8
+    # ========================================================================
+
+    async def calculate_v30_governance_quality(self):
+        """
+        V30. Governance Quality Strategy (Phase 3.8 - Paradigm Shift)
+
+        핵심 개념: 지배구조 품질 = 주주가치 실현 가능성
+        - 외국인/기관 수급: 정보우위 투자자의 평가
+        - 배당 + 자사주: 주주환원 의지
+        - Value-Up 정신: 주주친화적 경영
+
+        Score calculation:
+        1. Institutional Quality (40%): 외국인 + 기관 보유비율 합산
+        2. Shareholder Return Commitment (35%): 배당성향 + 자사주 비율
+        3. Ownership Stability (25%): 최대주주 지분율 (너무 높으면 감점)
+
+        Data: kr_individual_investor_daily_trading, kr_stock_dividends, kr_treasury_stocks
+        """
+        # Combined query: 4개 테이블을 서브쿼리로 병합 (연결 수 4→1 최적화)
+        combined_query = """
+        SELECT
+            -- 1. Foreign ownership (kr_foreign_ownership)
+            (SELECT foreign_rate
+             FROM kr_foreign_ownership
+             WHERE symbol = $1
+             ORDER BY date DESC
+             LIMIT 1) as foreign_holding_rate,
+
+            -- 2. Institutional buy ratio (kr_individual_investor_daily_trading)
+            (SELECT AVG(inst_buy_ratio)
+             FROM kr_individual_investor_daily_trading
+             WHERE symbol = $1
+               AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '30 days') as inst_rate,
+
+            -- 3. Major shareholder ratio (kr_largest_shareholder)
+            (SELECT trmend_posesn_stock_qota_rt
+             FROM kr_largest_shareholder
+             WHERE symbol = $1
+             ORDER BY stlm_dt DESC
+             LIMIT 1) as major_shareholder_ratio,
+
+            -- 4. Payout ratio (kr_dividends)
+            (SELECT thstrm
+             FROM kr_dividends
+             WHERE symbol = $1
+               AND se = '(연결)현금배당성향(%)'
+             ORDER BY stlm_dt DESC
+             LIMIT 1) as payout_ratio,
+
+            -- 5. Fallback foreign rate (kr_individual_investor_daily_trading)
+            (SELECT AVG(foreign_buy_ratio)
+             FROM kr_individual_investor_daily_trading
+             WHERE symbol = $1
+               AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '30 days') as alt_foreign_rate
+        """
+
+        # Execute single combined query (기존 4-5개 쿼리 → 1개로 병합)
+        combined_result = await self.execute_query(combined_query, self.symbol, self.analysis_date)
+
+        # Process results
+        foreign_rate = 0.0
+        inst_rate = 0.0
+        major_shareholder_ratio = 0.0
+        payout_ratio = 0.0
+
+        if combined_result and len(combined_result) > 0:
+            row = combined_result[0]
+
+            if row.get('foreign_holding_rate'):
+                foreign_rate = float(row['foreign_holding_rate'])
+
+            if row.get('inst_rate'):
+                inst_rate = float(row['inst_rate'])
+
+            if row.get('major_shareholder_ratio'):
+                major_shareholder_ratio = float(row['major_shareholder_ratio'])
+
+            if row.get('payout_ratio'):
+                payout_ratio = float(row['payout_ratio'])
+
+            # Fallback: If no foreign ownership data, use alt_foreign_rate
+            if foreign_rate == 0 and row.get('alt_foreign_rate'):
+                foreign_rate = float(row['alt_foreign_rate'])
+
+        # Step 4: Calculate component scores
+
+        # Institutional Quality Score (40%)
+        # Foreign + Inst combined: 0% = 0, 30% = 70, 50%+ = 100
+        combined_inst = foreign_rate + inst_rate
+        if combined_inst >= 50:
+            inst_score = 100
+        elif combined_inst <= 0:
+            inst_score = 0
+        else:
+            inst_score = min(100, combined_inst * 2)
+
+        # Shareholder Return Commitment Score (35%)
+        # Payout ratio: 0% = 0, 30% = 70, 50%+ = 100 (但 >100% = 경고)
+        if payout_ratio >= 100:
+            payout_score = 60  # Unsustainable payout
+        elif payout_ratio >= 50:
+            payout_score = 100
+        elif payout_ratio >= 30:
+            payout_score = 70 + (payout_ratio - 30) * 1.5
+        elif payout_ratio > 0:
+            payout_score = payout_ratio * 2.33
+        else:
+            payout_score = 0
+
+        # Ownership Stability Score (25%)
+        # Major shareholder: 30-50% = best, <20% or >70% = concern
+        if 30 <= major_shareholder_ratio <= 50:
+            stability_score = 100  # Balanced control
+        elif 20 <= major_shareholder_ratio < 30:
+            stability_score = 80  # Slightly low
+        elif 50 < major_shareholder_ratio <= 60:
+            stability_score = 80  # Slightly high
+        elif 10 <= major_shareholder_ratio < 20:
+            stability_score = 60  # Low - takeover risk
+        elif 60 < major_shareholder_ratio <= 70:
+            stability_score = 60  # High - minority squeeze risk
+        elif major_shareholder_ratio < 10:
+            stability_score = 40  # Very low
+        else:  # > 70%
+            stability_score = 40  # Very high - poor governance
+
+        # Base score
+        score = inst_score * 0.40 + payout_score * 0.35 + stability_score * 0.25
+
+        logger.info(f"V30: Governance (Foreign+Inst: {combined_inst:.1f}%, Payout: {payout_ratio:.1f}%, Major: {major_shareholder_ratio:.1f}%, Score: {score:.1f})")
+
+        return min(100, max(0, score))
+
 
     # ========================================================================
     # Calculate All Value Factor Scores
@@ -4332,19 +4890,20 @@ class ValueFactorCalculator:
 
     async def calculate_all_strategies(self):
         """
-        Calculate all value factor strategies (Phase 3.7 Upgrade)
+        Calculate all value factor strategies (Phase 3.8 Upgrade)
         Returns: dict of {strategy_name: score}
 
-        Active strategies (11 total - Phase 3.7):
+        Active strategies (15 total - Phase 3.8):
         - V2 (Magic Formula), V3 (Net Cash Flow Yield), V4 (Sustainable Dividend)
         - V13 (Magic Formula), V14 (Dividend Growth)
-        - V21~V26 (New Korean-style Value strategies)
+        - V21~V26 (Korean-style Value strategies)
+        - V27~V30 (NEW: Shareholder Value Paradigm - Phase 3.8)
 
         Deprecated (negative IC): V1, V5~V12, V15~V20
         """
         logger.info(f"Calculating all value factor strategies for {self.symbol}")
 
-        # Phase 3.7: Only 11 active strategies (positive/neutral IC)
+        # Phase 3.8: 15 active strategies (positive/neutral IC)
         # Deprecated (negative IC): V1, V5~V12, V15~V20
         strategies = {
             # Existing strategies with positive/neutral IC
@@ -4353,13 +4912,18 @@ class ValueFactorCalculator:
             'V4_Sustainable_Dividend': await self.calculate_v4(),
             'V13_Magic_Formula_Enhanced': await self.calculate_v13(),
             'V14_Dividend_Growth': await self.calculate_v14(),
-            # New Korean-style value strategies (Phase 3.7)
+            # Korean-style value strategies (Phase 3.7)
             'V21_Korea_Adjusted_PBR': await self.calculate_v21_korea_adjusted_pbr(),
             'V22_Quality_Dividend': await self.calculate_v22_quality_dividend(),
             'V23_Asset_Growth_Value': await self.calculate_v23_asset_growth_value(),
             'V24_Operating_Leverage': await self.calculate_v24_operating_leverage(),
             'V25_Cash_Rich_Undervalued': await self.calculate_v25_cash_rich_undervalued(),
             'V26_Smart_Money_Value': await self.calculate_v26_smart_money_value(),
+            # NEW: Shareholder Value Paradigm (Phase 3.8)
+            'V27_Total_Shareholder_Return': await self.calculate_v27_total_shareholder_return(),
+            'V28_Value_Trap_Filter': await self.calculate_v28_value_trap_filter(),
+            'V29_Accounting_Freshness': await self.calculate_v29_accounting_freshness(),
+            'V30_Governance_Quality': await self.calculate_v30_governance_quality(),
         }
 
         self.strategies_scores = strategies
