@@ -95,13 +95,13 @@ flowchart TB
         GROWTH[Growth Factor]
     end
 
-    subgraph Phase4["Phase 4: 추가 지표"]
+    subgraph Phase4["Phase 4: 추가 지표 계산"]
         RISK[리스크 지표]
         AGENT[Agent 지표]
         SCENARIO[시나리오 확률]
     end
 
-    subgraph Output["출력"]
+    subgraph Output["출력 및 저장"]
         GRADE[투자 등급]
         DB[(stock_grade)]
     end
@@ -162,39 +162,7 @@ flowchart LR
 | **Momentum** | 23개 | 가격 모멘텀, RSI, MACD, 외국인 순매수 |
 | **Growth** | 18개 | 매출/EPS/영업이익 성장률, R&D 투자 |
 
-<details>
-<summary><b>Value Factor 상세 (15개 전략)</b></summary>
-
-| 전략 | 설명 | 핵심 지표 |
-|------|------|----------|
-| V2 | Magic Formula | ROIC + Earnings Yield |
-| V4 | 지속가능 배당 | 배당수익률 + 안정성 |
-| V13 | Magic Enhanced | V2 개선판 |
-| V21 | 저PBR 고ROE | PBR < 1 AND ROE > 10% |
-| V22 | 그레이엄 NCAV | (유동자산 - 총부채) / 시총 |
-| V23 | EV/EBITDA | Enterprise Value / EBITDA |
-| V27 | 배당성향 우수 | 적정 배당성향 (20~60%) |
-| V28 | 자사주 매입 | 자사주 매입 비율 |
-| V30 | 총주주환원율 | 배당 + 자사주 매입 |
-
-</details>
-
-<details>
-<summary><b>Momentum Factor 상세 (23개 전략)</b></summary>
-
-| 전략 | 설명 |
-|------|------|
-| M1 | 1/3/6개월 가격 모멘텀 |
-| M2 | 52주 신고가 근접도 |
-| M3 | 추세 강도 (ADX) |
-| M5 | RSI |
-| M6 | MACD |
-| M7 | 볼린저 밴드 위치 |
-| M23 | 외국인 순매수 모멘텀 |
-
 **특징**: 섹터 멀티플라이어 (0.5~1.5) 적용
-
-</details>
 
 ### 19개 시장 상태 분류
 
@@ -243,12 +211,12 @@ flowchart LR
     BASE --> COND --> NORM --> LIMIT
 ```
 
-| 팩터 | IC | 기본 가중치 |
-|------|-----|------------|
-| Growth | 0.495 | 40% |
-| Quality | 0.004 | 25% |
-| Momentum | 0.041 | 20% |
-| Value | 0.083 | 15% |
+| 팩터 | 기본 가중치 |
+|------|------------|
+| Growth | 40% |
+| Quality | 25% |
+| Momentum | 20% |
+| Value | 15% |
 
 ### 등급 결정 (6단계)
 
@@ -412,14 +380,6 @@ flowchart LR
 <details>
 <summary><b>NASDAQ 최적화</b></summary>
 
-**NASDAQ vs NYSE IC 비교**
-
-| 지표 | NASDAQ | NYSE |
-|------|--------|------|
-| Total IC | 0.154 | 0.271 |
-| Momentum IC | 0.066 | 0.252 |
-| Growth IC | 0.136 | 최고 |
-
 **NASDAQ 기본 가중치**
 - Growth: 45% (IC 0.136 최고)
 - Value: 20%
@@ -428,18 +388,6 @@ flowchart LR
 
 </details>
 
-<details>
-<summary><b>Healthcare 섹터 최적화</b></summary>
-
-**서브섹터 분류**
-
-| 서브섹터 | 분류 기준 | IC |
-|----------|-----------|-----|
-| Medical Services | SIC: 8000, 8011 등 | 0.114+ |
-| Medical Devices | SIC: 3841-3845 | 0.015 |
-| Big Pharma | Market Cap > 50B | -0.021 |
-| Biotech | R&D >= 20% | -0.001 |
-
 **Cash Runway 평가**
 
 | Runway | 패널티 | 위험도 |
@@ -447,8 +395,6 @@ flowchart LR
 | < 12개월 | -15점 | Critical |
 | < 18개월 | -10점 | High Risk |
 | < 24개월 | -5점 | Warning |
-
-</details>
 
 ---
 
