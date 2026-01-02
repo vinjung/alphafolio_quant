@@ -1009,99 +1009,148 @@ class USAgentMetrics:
         symbol: str,
         analysis_date: date,
         final_score: float,
-        sector: str
+        sector: str,
+        regime_data: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """
-        Calculate scenario probabilities based on historical patterns
+        Calculate scenario probabilities using HYBRID approach.
+        Combines Macro (top-down) and Backtest (bottom-up) with confidence weighting.
 
-        Phase 3.1 Update:
-            - Apply calibration coefficients to correct prediction bias
-            - bull: calibrated = 0.124 * predicted + 0.233
-            - bear: calibrated = 0.612 * predicted + 0.095
-            - base: derived from (1 - bull - bear) to ensure sum = 100%
+        Phase 3.7 Update (Hybrid Probability):
+            - Step 1: Get Macro-based probability (top-down)
+            - Step 2: Get Backtest-based probability (bottom-up)
+            - Step 3: Combine with confidence-based weighting
+              - w_backtest = min(0.7, sample_count / 50)
+              - w_macro = 1 - w_backtest
+            - Step 4: Apply score adjustment
 
-        Current Logic:
-            1. Generate raw probabilities based on final_score ranges
-            2. Apply calibration formulas to bull and bear
-            3. Derive base (sideways) to ensure total = 100%
-            4. Normalize if needed
+        Benefits:
+            - Graceful degradation: Falls back to macro if no backtest samples
+            - Data-driven: More samples = more trust in backtest
+            - Market context: Always considers macro environment
 
         Args:
             symbol: Stock symbol
             analysis_date: Analysis date
             final_score: Current final score
             sector: Stock sector
+            regime_data: Market regime data with scenario_probability (Optional)
 
         Returns:
             {
                 'scenario_bullish_prob': int (0-100),
                 'scenario_sideways_prob': int (0-100),
                 'scenario_bearish_prob': int (0-100),
-                'scenario_bullish_return': str,
-                'scenario_sideways_return': str,
-                'scenario_bearish_return': str,
-                'scenario_sample_count': int
+                'scenario_bullish_return': str (measured percentile),
+                'scenario_sideways_return': str (measured percentile),
+                'scenario_bearish_return': str (measured percentile),
+                'scenario_sample_count': int,
+                'macro_environment': str,
+                'macro_weight': float,
+                'backtest_weight': float
             }
         """
         try:
-            # Step 1: Raw probability based on score (as decimal 0-1)
-            if final_score >= 75:
-                raw_bull = 0.55
-                raw_bear = 0.15
-            elif final_score >= 60:
-                raw_bull = 0.40
-                raw_bear = 0.20
-            elif final_score >= 45:
-                raw_bull = 0.25
-                raw_bear = 0.30
+            macro_env = None
+
+            # ================================================================
+            # Step 1: Get Macro-based probability (Top-Down)
+            # ================================================================
+            if regime_data and 'scenario_probability' in regime_data:
+                macro_prob = regime_data['scenario_probability']
+                macro_bull = macro_prob.get('강세', 0.33)
+                macro_bear = macro_prob.get('약세', 0.33)
+                macro_sideways = 1.0 - macro_bull - macro_bear
+                macro_env = regime_data.get('macro_environment', 'UNKNOWN')
+                logger.debug(f"{symbol}: Macro Environment {macro_env} "
+                            f"(bull={macro_bull:.0%}, bear={macro_bear:.0%})")
             else:
-                raw_bull = 0.15
-                raw_bear = 0.50
+                # Fallback: Legacy score-based logic as macro proxy
+                if final_score >= 75:
+                    macro_bull, macro_bear = 0.55, 0.15
+                elif final_score >= 60:
+                    macro_bull, macro_bear = 0.40, 0.20
+                elif final_score >= 45:
+                    macro_bull, macro_bear = 0.25, 0.30
+                else:
+                    macro_bull, macro_bear = 0.15, 0.50
+                macro_sideways = 1.0 - macro_bull - macro_bear
+                macro_env = 'LEGACY'
 
-            # Step 2: Apply calibration formulas
-            # bull: calibrated = slope * predicted + intercept
-            bull_cal = SCENARIO_CALIBRATION['bull']
-            calibrated_bull = bull_cal['slope'] * raw_bull + bull_cal['intercept']
+            # ================================================================
+            # Step 2: Get Backtest-based probability (Bottom-Up)
+            # ================================================================
+            backtest_data = await self._calculate_backtest_probability(final_score, sector)
+            backtest_bull = backtest_data['bullish_prob']
+            backtest_bear = backtest_data['bearish_prob']
+            backtest_sideways = backtest_data['sideways_prob']
+            sample_count = backtest_data['sample_count']
 
-            # bear: calibrated = slope * predicted + intercept
-            bear_cal = SCENARIO_CALIBRATION['bear']
-            calibrated_bear = bear_cal['slope'] * raw_bear + bear_cal['intercept']
+            # ================================================================
+            # Step 3: Calculate confidence-based weights
+            # More samples = more trust in backtest (max 70%)
+            # ================================================================
+            if sample_count > 0:
+                w_backtest = min(0.70, sample_count / 50)
+            else:
+                w_backtest = 0.0  # No backtest data, use macro only
+            w_macro = 1.0 - w_backtest
 
-            # Step 3: Clamp to valid range [0.05, 0.90]
-            calibrated_bull = max(0.05, min(0.90, calibrated_bull))
-            calibrated_bear = max(0.05, min(0.90, calibrated_bear))
+            # ================================================================
+            # Step 4: Combine probabilities with weighted average
+            # ================================================================
+            hybrid_bull = w_macro * macro_bull + w_backtest * backtest_bull
+            hybrid_bear = w_macro * macro_bear + w_backtest * backtest_bear
+            hybrid_sideways = 1.0 - hybrid_bull - hybrid_bear
 
-            # Step 4: Derive base (sideways) to ensure sum = 1.0
-            calibrated_base = 1.0 - calibrated_bull - calibrated_bear
+            # Step 5: Apply final_score adjustment (±10% range)
+            score_adj = (final_score - 50) / 500
+            adjusted_bull = hybrid_bull + score_adj
+            adjusted_bear = hybrid_bear - score_adj
 
-            # If base becomes negative or too small, normalize all three
-            if calibrated_base < 0.05:
-                total = calibrated_bull + calibrated_bear + 0.05
-                calibrated_bull = calibrated_bull / total * 0.95
-                calibrated_bear = calibrated_bear / total * 0.95
-                calibrated_base = 0.05
+            # Step 6: Clamp to valid range [0.05, 0.85]
+            adjusted_bull = max(0.05, min(0.85, adjusted_bull))
+            adjusted_bear = max(0.05, min(0.85, adjusted_bear))
+
+            # Step 7: Derive sideways to ensure sum = 1.0
+            adjusted_sideways = 1.0 - adjusted_bull - adjusted_bear
+
+            if adjusted_sideways < 0.10:
+                excess = 0.10 - adjusted_sideways
+                bull_ratio = adjusted_bull / (adjusted_bull + adjusted_bear)
+                adjusted_bull -= excess * bull_ratio
+                adjusted_bear -= excess * (1 - bull_ratio)
+                adjusted_sideways = 0.10
 
             # Convert to integer percentages
-            bullish_prob = round(calibrated_bull * 100)
-            bearish_prob = round(calibrated_bear * 100)
+            bullish_prob = round(adjusted_bull * 100)
+            bearish_prob = round(adjusted_bear * 100)
             sideways_prob = 100 - bullish_prob - bearish_prob
 
-            # Ensure sideways is non-negative
             if sideways_prob < 0:
                 sideways_prob = 0
                 total = bullish_prob + bearish_prob
-                bullish_prob = round(bullish_prob / total * 100)
-                bearish_prob = 100 - bullish_prob
+                if total > 0:
+                    bullish_prob = round(bullish_prob / total * 100)
+                    bearish_prob = 100 - bullish_prob
 
-            # Expected returns (simplified estimates)
+            # Step 8: Calculate expected returns from historical backtest
+            return_data = await self._calculate_scenario_returns(final_score, sector)
+
+            logger.debug(f"{symbol}: Hybrid prob - macro_w={w_macro:.2f}, backtest_w={w_backtest:.2f}, "
+                        f"samples={sample_count}, final=bull:{bullish_prob}%/bear:{bearish_prob}%")
+
             return {
                 'scenario_bullish_prob': bullish_prob,
                 'scenario_sideways_prob': sideways_prob,
                 'scenario_bearish_prob': bearish_prob,
-                'scenario_bullish_return': '+10~20%',
-                'scenario_sideways_return': '-5~+5%',
-                'scenario_bearish_return': '-10~-20%',
-                'scenario_sample_count': None  # No actual sample in simplified version
+                'scenario_bullish_return': return_data['bullish_return'],
+                'scenario_sideways_return': return_data['sideways_return'],
+                'scenario_bearish_return': return_data['bearish_return'],
+                'scenario_sample_count': sample_count,
+                'macro_environment': macro_env,
+                'macro_weight': round(w_macro, 2),
+                'backtest_weight': round(w_backtest, 2)
             }
 
         except Exception as e:
@@ -1113,8 +1162,220 @@ class USAgentMetrics:
                 'scenario_bullish_return': None,
                 'scenario_sideways_return': None,
                 'scenario_bearish_return': None,
-                'scenario_sample_count': None
+                'scenario_sample_count': None,
+                'macro_environment': None,
+                'macro_weight': None,
+                'backtest_weight': None
             }
+
+    async def _calculate_backtest_probability(
+        self,
+        final_score: float,
+        sector: str
+    ) -> Dict[str, Any]:
+        """
+        Calculate scenario probabilities from historical backtest data.
+
+        Query similar cases (same sector, score ±5) and calculate:
+        - Scenario occurrence rates (bullish/sideways/bearish)
+
+        Scenario Definition:
+        - Bullish: return_60d > +5%
+        - Sideways: -5% <= return_60d <= +5%
+        - Bearish: return_60d < -5%
+
+        Returns:
+            {
+                'bullish_prob': float (0-1),
+                'sideways_prob': float (0-1),
+                'bearish_prob': float (0-1),
+                'sample_count': int
+            }
+        """
+        default_result = {
+            'bullish_prob': 0.33,
+            'sideways_prob': 0.34,
+            'bearish_prob': 0.33,
+            'sample_count': 0
+        }
+
+        try:
+            query = """
+            WITH similar_cases AS (
+                SELECT
+                    g.symbol,
+                    g.date as analysis_date,
+                    g.final_score,
+                    d_start.close as start_close,
+                    d_end.close as end_close,
+                    CASE
+                        WHEN d_end.close IS NOT NULL AND d_start.close > 0
+                        THEN (d_end.close - d_start.close) / d_start.close * 100
+                        ELSE NULL
+                    END as return_60d
+                FROM us_stock_grade g
+                JOIN us_stock_basic b ON g.symbol = b.symbol
+                JOIN us_daily d_start ON g.symbol = d_start.symbol AND g.date = d_start.date
+                LEFT JOIN LATERAL (
+                    SELECT close
+                    FROM us_daily
+                    WHERE symbol = g.symbol
+                        AND date >= g.date + INTERVAL '55 days'
+                        AND date <= g.date + INTERVAL '65 days'
+                    ORDER BY date
+                    LIMIT 1
+                ) d_end ON true
+                WHERE g.final_score BETWEEN $1 - 5 AND $1 + 5
+                    AND b.sector = $2
+                    AND g.date < CURRENT_DATE - INTERVAL '65 days'
+                    AND d_end.close IS NOT NULL
+            )
+            SELECT
+                COUNT(*) as total_count,
+                COUNT(*) FILTER (WHERE return_60d > 5) as bullish_count,
+                COUNT(*) FILTER (WHERE return_60d BETWEEN -5 AND 5) as sideways_count,
+                COUNT(*) FILTER (WHERE return_60d < -5) as bearish_count
+            FROM similar_cases
+            """
+
+            result = await self.db.execute_query(query, final_score, sector)
+
+            if not result or not result[0]['total_count'] or result[0]['total_count'] < 10:
+                logger.debug(f"Insufficient backtest samples (sector={sector}, score={final_score})")
+                return default_result
+
+            r = result[0]
+            total = r['total_count']
+            bullish = r['bullish_count'] or 0
+            sideways = r['sideways_count'] or 0
+            bearish = r['bearish_count'] or 0
+
+            return {
+                'bullish_prob': bullish / total,
+                'sideways_prob': sideways / total,
+                'bearish_prob': bearish / total,
+                'sample_count': total
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate backtest probability: {e}")
+            return default_result
+
+    async def _calculate_scenario_returns(
+        self,
+        final_score: float,
+        sector: str
+    ) -> Dict[str, Any]:
+        """
+        Calculate expected returns from historical backtest data.
+
+        Query similar cases (same sector, score ±5) and calculate:
+        - 60-day forward return
+        - Percentile 25-75 for each scenario
+
+        Scenario Definition:
+        - Bullish: return_60d > +5%
+        - Sideways: -5% <= return_60d <= +5%
+        - Bearish: return_60d < -5%
+
+        Returns:
+            {
+                'bullish_return': str (e.g., '+12~+25%'),
+                'sideways_return': str (e.g., '-3~+4%'),
+                'bearish_return': str (e.g., '-18~-8%'),
+                'sample_count': int
+            }
+        """
+        default_returns = {
+            'bullish_return': '+10~20%',
+            'sideways_return': '-5~+5%',
+            'bearish_return': '-15~-8%',
+            'sample_count': 0
+        }
+
+        try:
+            query = """
+            WITH similar_cases AS (
+                SELECT
+                    g.symbol,
+                    g.date as analysis_date,
+                    g.final_score,
+                    d_start.close as start_close,
+                    d_end.close as end_close,
+                    CASE
+                        WHEN d_end.close IS NOT NULL AND d_start.close > 0
+                        THEN (d_end.close - d_start.close) / d_start.close * 100
+                        ELSE NULL
+                    END as return_60d
+                FROM us_stock_grade g
+                JOIN us_stock_basic b ON g.symbol = b.symbol
+                JOIN us_daily d_start ON g.symbol = d_start.symbol AND g.date = d_start.date
+                LEFT JOIN LATERAL (
+                    SELECT close
+                    FROM us_daily
+                    WHERE symbol = g.symbol
+                        AND date >= g.date + INTERVAL '55 days'
+                        AND date <= g.date + INTERVAL '65 days'
+                    ORDER BY date
+                    LIMIT 1
+                ) d_end ON true
+                WHERE g.final_score BETWEEN $1 - 5 AND $1 + 5
+                    AND b.sector = $2
+                    AND g.date < CURRENT_DATE - INTERVAL '65 days'
+                    AND d_end.close IS NOT NULL
+            )
+            SELECT
+                COUNT(*) as total_count,
+                -- Bullish (>5%)
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d > 5)::numeric, 1) as bullish_p25,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d > 5)::numeric, 1) as bullish_p75,
+                -- Sideways (-5% ~ +5%)
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d BETWEEN -5 AND 5)::numeric, 1) as sideways_p25,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d BETWEEN -5 AND 5)::numeric, 1) as sideways_p75,
+                -- Bearish (<-5%)
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d < -5)::numeric, 1) as bearish_p25,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_60d)
+                    FILTER (WHERE return_60d < -5)::numeric, 1) as bearish_p75
+            FROM similar_cases
+            """
+
+            result = await self.db.execute_query(query, final_score, sector)
+
+            if not result or not result[0]['total_count'] or result[0]['total_count'] < 10:
+                logger.debug(f"Insufficient samples for scenario returns (sector={sector}, score={final_score})")
+                return default_returns
+
+            r = result[0]
+            sample_count = r['total_count']
+
+            # Format return strings
+            bullish_p25 = r['bullish_p25'] if r['bullish_p25'] is not None else 10
+            bullish_p75 = r['bullish_p75'] if r['bullish_p75'] is not None else 20
+            sideways_p25 = r['sideways_p25'] if r['sideways_p25'] is not None else -3
+            sideways_p75 = r['sideways_p75'] if r['sideways_p75'] is not None else 3
+            bearish_p25 = r['bearish_p25'] if r['bearish_p25'] is not None else -18
+            bearish_p75 = r['bearish_p75'] if r['bearish_p75'] is not None else -8
+
+            def format_return(p25, p75):
+                p25_str = f"+{p25:.0f}" if p25 > 0 else f"{p25:.0f}"
+                p75_str = f"+{p75:.0f}" if p75 > 0 else f"{p75:.0f}"
+                return f"{p25_str}~{p75_str}%"
+
+            return {
+                'bullish_return': format_return(bullish_p25, bullish_p75),
+                'sideways_return': format_return(sideways_p25, sideways_p75),
+                'bearish_return': format_return(bearish_p25, bearish_p75),
+                'sample_count': sample_count
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate scenario returns: {e}")
+            return default_returns
 
     # ========================================================================
     # Main Entry Point: Calculate All Metrics
@@ -1127,7 +1388,8 @@ class USAgentMetrics:
         current_score: float,
         sector: str,
         var_95: Optional[float] = None,
-        sector_percentile: Optional[float] = None
+        sector_percentile: Optional[float] = None,
+        regime_data: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """
         Calculate all agent metrics for a stock
@@ -1139,6 +1401,7 @@ class USAgentMetrics:
             sector: Stock sector
             var_95: VaR 95% value (optional, for position sizing)
             sector_percentile: Sector percentile rank (optional, for triggers)
+            regime_data: Market regime data with scenario_probability (optional, Phase 3.5)
 
         Returns:
             Dictionary containing all calculated metrics
@@ -1149,7 +1412,8 @@ class USAgentMetrics:
         timing_task = self.calculate_entry_timing_score(symbol, analysis_date, current_score)
         iv_task = self.calculate_iv_percentile(symbol, analysis_date)
         insider_task = self.calculate_insider_signal(symbol, analysis_date)
-        scenario_task = self.calculate_scenario_probability(symbol, analysis_date, current_score, sector)
+        # Phase 3.5: Pass regime_data for Macro-based scenario probability
+        scenario_task = self.calculate_scenario_probability(symbol, analysis_date, current_score, sector, regime_data)
 
         atr_result, timing_result, iv_percentile, insider_signal, scenario_result = await asyncio.gather(
             atr_task, timing_task, iv_task, insider_task, scenario_task
@@ -1196,12 +1460,13 @@ class USAgentMetrics:
             'sell_triggers': triggers['sell_triggers'],
             'hold_triggers': triggers['hold_triggers'],
 
-            # Scenario analysis
+            # Scenario analysis (Phase 3.5: Macro-based)
             'scenario_bullish_prob': scenario_result.get('scenario_bullish_prob'),
             'scenario_sideways_prob': scenario_result.get('scenario_sideways_prob'),
             'scenario_bearish_prob': scenario_result.get('scenario_bearish_prob'),
             'scenario_bullish_return': scenario_result.get('scenario_bullish_return'),
             'scenario_sideways_return': scenario_result.get('scenario_sideways_return'),
             'scenario_bearish_return': scenario_result.get('scenario_bearish_return'),
-            'scenario_sample_count': scenario_result.get('scenario_sample_count')
+            'scenario_sample_count': scenario_result.get('scenario_sample_count'),
+            'macro_environment': scenario_result.get('macro_environment')
         }

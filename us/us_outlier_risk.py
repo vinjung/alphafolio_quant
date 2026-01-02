@@ -35,26 +35,15 @@ from typing import Dict, List, Optional, Tuple
 from datetime import date
 from decimal import Decimal
 
-try:
-    from .config.weight_adjustments import (
-        ORS_PRICE_SCORES,
-        ORS_VOLUME_SCORES,
-        ORS_VOLATILITY_SCORES,
-        ORS_MKTCAP_SCORES,
-        ORS_RISK_LEVELS,
-        get_risk_level,
-        get_position_multiplier,
-    )
-except ImportError:
-    from config.weight_adjustments import (
-        ORS_PRICE_SCORES,
-        ORS_VOLUME_SCORES,
-        ORS_VOLATILITY_SCORES,
-        ORS_MKTCAP_SCORES,
-        ORS_RISK_LEVELS,
-        get_risk_level,
-        get_position_multiplier,
-    )
+from weight_adjustments import (
+    ORS_PRICE_SCORES,
+    ORS_VOLUME_SCORES,
+    ORS_VOLATILITY_SCORES,
+    ORS_MKTCAP_SCORES,
+    ORS_RISK_LEVELS,
+    get_risk_level,
+    get_position_multiplier,
+)
 
 logging.basicConfig(
     level=logging.INFO,

@@ -61,8 +61,8 @@ class AsyncDatabaseManager:
                 min_size=min_size,
                 max_size=max_size,
                 command_timeout=600,
-                timeout=30,  # Connection acquisition timeout
-                max_inactive_connection_lifetime=3600,
+                timeout=45,  # Connection acquisition timeout (increased for stability)
+                max_inactive_connection_lifetime=1800,  # 30 min (match US settings, prevent premature connection close)
                 server_settings={
                     'statement_timeout': '600000',
                     'tcp_keepalives_idle': '30',
@@ -95,13 +95,15 @@ class AsyncDatabaseManager:
                     # Connection health check
                     try:
                         await conn.fetchval('SELECT 1')
-                    except:
+                    except Exception as health_error:
+                        # 건강 검사 실패 시 연결을 풀에서 강제 제거
+                        logger.warning(f"Connection health check failed (attempt {attempt + 1}): {str(health_error)[:50]}")
+                        conn.terminate()  # 끊긴 연결을 풀에서 제거
                         if attempt < max_retries:
-                            wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4 seconds
+                            wait_time = 2 ** attempt
                             await asyncio.sleep(wait_time)
                             continue
-                        else:
-                            raise
+                        raise health_error
 
                     rows = await conn.fetch(query, *params)
                     return [dict(row) for row in rows]
@@ -121,13 +123,15 @@ class AsyncDatabaseManager:
                 is_retryable = any(err in error_msg for err in retryable_errors)
 
                 if is_retryable and attempt < max_retries:
-                    wait_time = 2 ** (attempt + 1)  # 2, 4 seconds
+                    wait_time = 2 ** (attempt + 1)
                     logger.warning(f"DB retry {attempt + 1}/{max_retries}: {str(e)[:50]}... waiting {wait_time}s")
                     await asyncio.sleep(wait_time)
                     continue
 
-                # Final attempt failed
+                # Final attempt failed - log error details
                 if attempt == max_retries:
+                    logger.error(f"Query execution failed: {e}")
+                    logger.error(f"Query: {query}")
                     raise
 
                 # Non-retryable errors on first attempts
@@ -149,6 +153,18 @@ class AsyncDatabaseManager:
         for attempt in range(max_retries + 1):
             try:
                 async with self.connection_pool.acquire() as conn:
+                    # Connection health check
+                    try:
+                        await conn.fetchval('SELECT 1')
+                    except Exception as health_error:
+                        logger.warning(f"Execute health check failed (attempt {attempt + 1}): {str(health_error)[:50]}")
+                        conn.terminate()
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            await asyncio.sleep(wait_time)
+                            continue
+                        raise health_error
+
                     return await conn.execute(query, *params)
             except Exception as e:
                 error_msg = str(e).lower()
@@ -170,8 +186,35 @@ class AsyncDatabaseManager:
             query: SQL query string
             params_list: List of parameter tuples
         """
-        async with self.connection_pool.acquire() as conn:
-            await conn.executemany(query, params_list)
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                async with self.connection_pool.acquire() as conn:
+                    # Connection health check
+                    try:
+                        await conn.fetchval('SELECT 1')
+                    except Exception as health_error:
+                        logger.warning(f"Executemany health check failed (attempt {attempt + 1}): {str(health_error)[:50]}")
+                        conn.terminate()
+                        if attempt < max_retries:
+                            wait_time = 2 ** attempt
+                            await asyncio.sleep(wait_time)
+                            continue
+                        raise health_error
+
+                    await conn.executemany(query, params_list)
+                    return
+            except Exception as e:
+                error_msg = str(e).lower()
+                retryable_errors = ["connection was closed", "connection does not exist", "semaphore"]
+                is_retryable = any(err in error_msg for err in retryable_errors)
+
+                if is_retryable and attempt < max_retries:
+                    wait_time = 2 ** (attempt + 1)
+                    logger.warning(f"DB executemany retry {attempt + 1}/{max_retries}: {str(e)[:50]}...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
 
     async def close(self):
         """Close connection pool"""
@@ -279,6 +322,45 @@ class AsyncDatabaseManager:
 # ===========================
 # kr_stock_grade Table Save Functions
 # ===========================
+
+async def save_trading_halted_to_kr_stock_grade(
+    db_manager: AsyncDatabaseManager,
+    symbol: str,
+    analysis_date: date,
+    stock_name: str = None
+) -> bool:
+    """
+    Save trading halted stock with minimal columns (only stock_name, symbol, date, final_grade)
+
+    Trading halted stocks are identified by: open = 0 or null AND close > 0
+    These stocks skip full quant analysis and only store basic info.
+
+    Args:
+        db_manager: AsyncDatabaseManager instance
+        symbol: Stock symbol
+        analysis_date: Analysis date
+        stock_name: Stock name (optional)
+
+    Returns:
+        bool: True if successful
+    """
+    try:
+        query = """
+        INSERT INTO kr_stock_grade (symbol, date, stock_name, final_grade)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (symbol, date)
+        DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            final_grade = EXCLUDED.final_grade
+        """
+        await db_manager.execute_query(
+            query, symbol, analysis_date, stock_name, '거래 정지'
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save trading halted stock {symbol}: {e}")
+        return False
+
 
 async def save_to_kr_stock_grade(
     db_manager: AsyncDatabaseManager,
@@ -398,14 +480,17 @@ async def save_to_kr_stock_grade(
             risk_profile_text, risk_recommendation,
             time_series_text, signal_overall,
             market_state, created_at,
-            value_v2_detail, quality_v2_detail, momentum_v2_detail, growth_v2_detail
+            value_v2_detail, quality_v2_detail, momentum_v2_detail, growth_v2_detail,
+            sharpe_ratio, sortino_ratio, calmar_ratio,
+            conviction_score, outlier_risk_score, risk_flag
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
             $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
             $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
-            $51, $52, $53, $54, $55, $56, $57, $58
+            $51, $52, $53, $54, $55, $56, $57, $58,
+            $59, $60, $61, $62, $63, $64
         )
         ON CONFLICT (symbol, date)
         DO UPDATE SET
@@ -463,7 +548,13 @@ async def save_to_kr_stock_grade(
             value_v2_detail = EXCLUDED.value_v2_detail,
             quality_v2_detail = EXCLUDED.quality_v2_detail,
             momentum_v2_detail = EXCLUDED.momentum_v2_detail,
-            growth_v2_detail = EXCLUDED.growth_v2_detail
+            growth_v2_detail = EXCLUDED.growth_v2_detail,
+            sharpe_ratio = EXCLUDED.sharpe_ratio,
+            sortino_ratio = EXCLUDED.sortino_ratio,
+            calmar_ratio = EXCLUDED.calmar_ratio,
+            conviction_score = EXCLUDED.conviction_score,
+            outlier_risk_score = EXCLUDED.outlier_risk_score,
+            risk_flag = EXCLUDED.risk_flag
         """
 
         await db_manager.execute(
@@ -525,7 +616,13 @@ async def save_to_kr_stock_grade(
             data.get('value_v2_detail'),
             data.get('quality_v2_detail'),
             data.get('momentum_v2_detail'),
-            data.get('growth_v2_detail')
+            data.get('growth_v2_detail'),
+            data.get('sharpe_ratio'),
+            data.get('sortino_ratio'),
+            data.get('calmar_ratio'),
+            data.get('conviction_score'),
+            data.get('outlier_risk_score'),
+            data.get('risk_flag')
         )
 
         logger.debug(f"Saved {symbol} to kr_stock_grade (date: {analysis_date})")

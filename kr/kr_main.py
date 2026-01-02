@@ -16,7 +16,7 @@ from datetime import date, datetime
 from dotenv import load_dotenv
 
 # Import async modules
-from db_async import AsyncDatabaseManager, save_to_kr_stock_grade, batch_save_to_kr_stock_grade
+from db_async import AsyncDatabaseManager, save_to_kr_stock_grade, batch_save_to_kr_stock_grade, save_trading_halted_to_kr_stock_grade
 from kr_value_factor import ValueFactorCalculator
 from kr_quality_factor import QualityFactorCalculator
 from kr_momentum_factor import MomentumFactorCalculator
@@ -25,6 +25,9 @@ from weight import ConditionAnalyzer, WeightCalculator
 from kr_additional_metrics import AdditionalMetricsCalculator
 from kr_interpretation import InterpretationEngine
 from batch_weight import AsyncBatchWeightCalculator
+from kr_alternative_matcher import AlternativeStockMatcher
+from kr_outlier_risk import KROutlierRisk
+from kr_data_prefetcher import KRDataPrefetcher
 
 # Load environment variables
 load_dotenv()
@@ -37,7 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=True, precomputed_weights=None, precomputed_conditions=None):
+async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=True, precomputed_weights=None, precomputed_conditions=None, precomputed_scenario_stats=None):
     """
     단일 종목 분석 (Option 1)
 
@@ -48,6 +51,7 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
         verbose: 상세 로그 출력 여부 (기본값: True)
         precomputed_weights: 사전 계산된 가중치 (batch processing용)
         precomputed_conditions: 사전 계산된 조건 (batch processing용)
+        precomputed_scenario_stats: 사전 계산된 시나리오 통계 (batch processing용)
 
     Returns:
         bool: 성공 여부
@@ -80,6 +84,10 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
 
             if verbose:
                 print(f"시장 상태: {market_state}\n")
+
+        # Step 1.5: Data Prefetching (query optimization - 83% query reduction)
+        prefetcher = KRDataPrefetcher(db_manager)
+        prefetched_data = await prefetcher.prefetch_all(symbol, analysis_date)
 
         # Step 2: 4개 팩터 점수 계산 (병렬 처리 - Pro 플랜 최적화)
         if verbose:
@@ -198,7 +206,7 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             }
         }
 
-        metrics_calc = AdditionalMetricsCalculator(symbol, db_manager, factor_scores_dict, analysis_date=analysis_date)
+        metrics_calc = AdditionalMetricsCalculator(symbol, db_manager, factor_scores_dict, analysis_date=analysis_date, prefetched_data=prefetched_data)
         additional_metrics = await metrics_calc.calculate_all_metrics()
 
         # Step 4.5: 멀티 에이전트 AI용 신규 지표 계산 (Phase Agent)
@@ -207,6 +215,25 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
 
         # ATR 기반 손절/익절
         atr_metrics = await metrics_calc.calculate_atr_stop_take_profit()
+
+        # Step 4.6: ORS (Outlier Risk Score) 및 Conviction Score 계산
+        if verbose:
+            print("Step 4.6: ORS 및 Conviction Score 계산...")
+
+        # ORS 계산
+        ors_calc = KROutlierRisk(db_manager, analysis_date)
+        ors_result = await ors_calc.calculate_ors_by_symbol(symbol)
+        outlier_risk_score = ors_result.get('ors', 0)
+        risk_flag = ors_result.get('risk_flag', 'NORMAL')
+
+        # Conviction Score 계산
+        conviction_score = metrics_calc.calculate_conviction_score(
+            value_score, quality_score, momentum_score, growth_score
+        )
+
+        if verbose:
+            print(f"  ORS: {outlier_risk_score:.1f} ({risk_flag})")
+            print(f"  Conviction Score: {conviction_score:.1f}")
 
         # Step 5: 최종 점수 계산 (Option 3: IC-based weights)
         if verbose:
@@ -257,14 +284,36 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
         industry_result = await db_manager.execute_query(industry_query, symbol)
         industry = industry_result[0]['industry'] if industry_result and industry_result[0]['industry'] else 'Unknown'
 
-        # Scenario Probability
-        scenario = await metrics_calc.calculate_scenario_probability(final_score, industry)
+        # Scenario Probability (Phase 3.10: Hybrid - pass market_sentiment + precomputed stats)
+        market_sentiment_for_scenario = conditions.get('market_sentiment', 'NEUTRAL')
+        scenario = await metrics_calc.calculate_scenario_probability(
+            final_score, industry, market_sentiment_for_scenario, precomputed_scenario_stats
+        )
 
-        # Action Triggers
+        # Action Triggers (Phase 3.13: Dynamic Context-Aware Triggers)
         stop_loss_pct = atr_metrics.get('stop_loss_pct', -10) if atr_metrics else -10
         take_profit_pct = atr_metrics.get('take_profit_pct', 15) if atr_metrics else 15
         sector_percentile = additional_metrics.get('sector_percentile', 50) or 50
-        triggers = metrics_calc.generate_action_triggers(final_score, sector_percentile, stop_loss_pct, take_profit_pct)
+
+        # Calculate additional trigger context data
+        consecutive_data = await metrics_calc.calculate_consecutive_trading_days()
+        technical_conditions = await metrics_calc.calculate_technical_trigger_conditions()
+
+        triggers = await metrics_calc.generate_action_triggers(
+            final_score=final_score,
+            sector_percentile=sector_percentile,
+            stop_loss_pct=stop_loss_pct,
+            take_profit_pct=take_profit_pct,
+            consecutive_data=consecutive_data,
+            technical_conditions=technical_conditions,
+            market_sentiment=conditions.get('market_sentiment', 'NEUTRAL'),
+            entry_timing_score=entry_timing.get('entry_timing_score', 0) if entry_timing else 0,
+            volatility_annual=additional_metrics.get('volatility_annual', 30) or 30,
+            max_drawdown_1y=additional_metrics.get('max_drawdown_1y', -20) or -20,
+            momentum_score=momentum_score,
+            value_score=value_score,
+            quality_score=quality_score
+        )
 
         if verbose:
             print(f"  Base Factor Score: {base_factor_score:.2f} "
@@ -292,62 +341,97 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             final_grade = '평가 불가'
             filters_passed = 0
         else:
-            # Phase 3.9: Market Timing Filters (Decile-based thresholds)
-            # Get market regime thresholds (based on Decile analysis: Top Decile 43.6+)
+            # Phase 3.11: Enhanced Grade System (Backtest-optimized thresholds)
+            # Based on phase3_11 analysis: 60-day win rates and returns
             market_sentiment = conditions.get('market_sentiment', 'NEUTRAL')
-            regime_thresholds = {
-                'PANIC': (50, 25),      # Bear: conservative BUY threshold
-                'FEAR': (48, 23),       # Bear: conservative
-                'NEUTRAL': (45, 21),    # Sideways: default (Decile 9-10 based)
-                'GREED': (43, 21),      # Bull: aggressive
-                'OVERHEATED': (48, 25)  # Overheated: conservative
-            }
-            buy_threshold, sell_threshold = regime_thresholds.get(market_sentiment, (45, 21))
 
+            # 6-level threshold system per market regime (backtest-optimized)
+            # strong_buy: 70%+ win rate target, buy: 55%+, buy_consider: 45%+
+            # sell_consider: <30% win rate, sell: <20% win rate
+            regime_thresholds = {
+                'PANIC':      {'strong_buy': 80, 'buy': 70, 'buy_consider': 60, 'sell_consider': 45, 'sell': 35},
+                'FEAR':       {'strong_buy': 78, 'buy': 68, 'buy_consider': 58, 'sell_consider': 43, 'sell': 33},
+                'NEUTRAL':    {'strong_buy': 75, 'buy': 65, 'buy_consider': 55, 'sell_consider': 40, 'sell': 30},
+                'GREED':      {'strong_buy': 72, 'buy': 62, 'buy_consider': 52, 'sell_consider': 38, 'sell': 28},
+                'OVERHEATED': {'strong_buy': 78, 'buy': 68, 'buy_consider': 58, 'sell_consider': 43, 'sell': 33}
+            }
+            t = regime_thresholds.get(market_sentiment, regime_thresholds['NEUTRAL'])
+
+            # === Buy Filters (4 filters) - Phase 3.12: 90-day basis ===
             # Filter 1: Momentum confirmation (min 35 for buy)
             momentum_pass = momentum_score >= 35
-            # Filter 2: Trend confirmation (SuperTrend)
+            # Filter 2: Trend confirmation (SuperTrend 90-day)
             supertrend = additional_metrics.get('supertrend_signal', '보유')
             trend_pass = supertrend in ['매수', '보유']
-            # Filter 3: Relative Strength (min -10% for buy)
-            rs_20d = additional_metrics.get('rs_20d', 0) or 0
-            rs_pass = rs_20d >= -10
-            # Filter 4: RSI overbought filter (RSI > 70 blocks BUY)
-            rsi = additional_metrics.get('rsi', 50) or 50
-            rsi_not_overbought = rsi <= 70
-            # Filter 5: Entry Timing (Phase 3.10 - High Entry >= 70 for 70%+ win rate)
+            # Filter 3: Relative Strength 90-day (min -10% for buy)
+            rs_90d = additional_metrics.get('rs_value', 0) or 0
+            rs_pass = rs_90d >= -10
+            # Filter 4: Entry Timing 90-day (High Entry >= 70 for 70%+ win rate)
             entry_timing_score = entry_timing.get('entry_timing_score', 0) if entry_timing else 0
             entry_timing_pass = entry_timing_score >= 70
+            # RSI filter removed (short-term indicator, not suitable for 90-day horizon)
 
-            filters_passed = sum([momentum_pass, trend_pass, rs_pass, rsi_not_overbought, entry_timing_pass])
+            filters_passed = sum([momentum_pass, trend_pass, rs_pass, entry_timing_pass])
 
-            # Phase 3.9: Theme-based penalty for low IC themes
+            # === Sell Filters (3 filters) - Phase 3.12: 90-day basis ===
+            # Based on backtest: Weak momentum + Low score = 24.4% win rate, -5.84% return
+            sell_filter_momentum = momentum_score < 30
+            sell_filter_timing = entry_timing_score < 40
+            sell_filter_rs = rs_90d < -20
+            sell_filters_passed = sum([sell_filter_momentum, sell_filter_timing, sell_filter_rs])
+
+            # Theme-based penalty for low IC themes
             theme = conditions.get('theme', '')
             low_ic_themes = ['Telecom_Media', 'IT_Software']
             theme_penalty = 5 if theme in low_ic_themes else 0
-            adjusted_buy_threshold = buy_threshold + theme_penalty
 
-            # Grade determination with timing filters (5 filters, require 4+ for BUY)
-            # Phase 3.10: Entry Timing Score added (High Entry + High Score = 70%+ win rate)
-            if final_score >= adjusted_buy_threshold and filters_passed >= 4:
+            # Adjusted thresholds with theme penalty
+            adj_strong_buy = t['strong_buy'] + theme_penalty
+            adj_buy = t['buy'] + theme_penalty
+            adj_buy_consider = t['buy_consider'] + theme_penalty
+
+            # === Phase 3.11: 6-Level Grade Determination ===
+            # Priority order: Strong Buy > Buy > Buy Consider > Sell > Sell Consider > Neutral
+
+            # 1. Strong Buy: High score + Optimal momentum (35-50) + 3+ filters (Phase 3.12: 4 filters total)
+            # Based on backtest: Strong(35-45) + 80+ = 87.8% win rate, +26.69% return
+            if (final_score >= adj_strong_buy and
+                35 <= momentum_score <= 50 and
+                filters_passed >= 3):
+                final_grade = '강력 매수'
+
+            # 2. Buy: Score >= buy_threshold AND 3+ filters passed
+            # Based on backtest: 65+ score = 59.6% win rate, +12.13% return
+            elif final_score >= adj_buy and filters_passed >= 3:
                 final_grade = '매수'
-            elif final_score >= adjusted_buy_threshold - 5 and filters_passed >= 3:
+
+            # 3. Buy Consider: Score >= buy_consider AND 2+ filters passed
+            elif final_score >= adj_buy_consider and filters_passed >= 2:
                 final_grade = '매수 고려'
-            elif final_score < sell_threshold or momentum_score < 25:
-                if final_score < sell_threshold - 10:
-                    final_grade = '매도'
-                else:
-                    final_grade = '매도 고려'
+
+            # 4. Sell: Score < sell_threshold AND 2+ sell filters passed
+            # Based on backtest: <30 score + weak filters = 8.7% win rate, -11.52% return
+            elif final_score < t['sell'] and sell_filters_passed >= 2:
+                final_grade = '매도'
+
+            # 5. Sell Consider: Score < sell_consider OR momentum < 25
+            # Based on backtest: <40 score = 28.4% win rate, +1.92% return (borderline)
+            elif final_score < t['sell_consider'] or momentum_score < 25:
+                final_grade = '매도 고려'
+
+            # 6. Neutral: Everything else
             else:
                 final_grade = '중립'
 
         if verbose:
-            print(f"Step 6: 최종 결과 (Phase 3.9: 시장 타이밍 필터)")
+            print(f"Step 6: 최종 결과 (Phase 3.12: 6단계 등급 시스템, 90일 기준)")
             if final_grade != '평가 불가' and final_score is not None:
                 print(f"  최종 점수: {final_score:.2f}")
-                print(f"  시장 레짐: {conditions.get('market_sentiment', 'NEUTRAL')} (Buy >= {adjusted_buy_threshold}, Sell < {sell_threshold})")
+                print(f"  시장 레짐: {market_sentiment}")
+                print(f"  임계값: 강력매수 >= {adj_strong_buy}, 매수 >= {adj_buy}, 매수고려 >= {adj_buy_consider}, 매도고려 < {t['sell_consider']}, 매도 < {t['sell']}")
                 print(f"  테마 페널티: {theme_penalty} ({theme})")
-                print(f"  필터 통과: {filters_passed}/5 (Momentum: {momentum_pass}, Trend: {trend_pass}, RS: {rs_pass}, RSI: {rsi_not_overbought}, EntryTiming: {entry_timing_pass})")
+                print(f"  매수 필터: {filters_passed}/4 (Momentum: {momentum_pass}, Trend90d: {trend_pass}, RS90d: {rs_pass}, EntryTiming90d: {entry_timing_pass})")
+                print(f"  매도 필터: {sell_filters_passed}/3 (Momentum<30: {sell_filter_momentum}, Timing<40: {sell_filter_timing}, RS<-20: {sell_filter_rs})")
             else:
                 print(f"  최종 점수: N/A (데이터 부족)")
             print(f"  투자 등급: {final_grade}\n")
@@ -459,7 +543,11 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             # Phase 3.9: Risk-Adjusted Returns
             'sharpe_ratio': additional_metrics.get('sharpe_ratio'),
             'sortino_ratio': additional_metrics.get('sortino_ratio'),
-            'calmar_ratio': additional_metrics.get('calmar_ratio')
+            'calmar_ratio': additional_metrics.get('calmar_ratio'),
+            # Phase Portfolio: ORS & Conviction Score
+            'conviction_score': conviction_score,
+            'outlier_risk_score': outlier_risk_score,
+            'risk_flag': risk_flag
         }
 
         success = await save_to_kr_stock_grade(db_manager, symbol, analysis_date, grade_data)
@@ -679,6 +767,33 @@ async def analyze_single_stock(symbol, db_manager, analysis_date=None, verbose=T
             print(f"{'='*80}\n")
 
         if success:
+            # Step 9: Alternative stock matching for sell/sell-consider grades (Option 1)
+            if final_grade in ('매도', '매도 고려'):
+                if verbose:
+                    print("Step 9: 대체 종목 매칭 중...")
+                matcher = AlternativeStockMatcher(db_manager)
+                match_success = await matcher.match_single_stock(symbol, analysis_date)
+                if match_success and verbose:
+                    # Query and display matched alternative
+                    alt_query = """
+                        SELECT alt_symbol, alt_stock_name, alt_final_grade, alt_final_score,
+                               alt_match_type, alt_reasons
+                        FROM kr_stock_grade
+                        WHERE symbol = $1 AND date = $2
+                    """
+                    alt_result = await db_manager.execute_query(alt_query, symbol, analysis_date)
+                    if alt_result and alt_result[0]['alt_symbol']:
+                        alt = alt_result[0]
+                        print(f"  대체 종목: {alt['alt_symbol']} {alt['alt_stock_name']}")
+                        print(f"  등급/점수: {alt['alt_final_grade']} ({alt['alt_final_score']}점)")
+                        print(f"  매칭 유형: {alt['alt_match_type']}")
+                        if alt['alt_reasons']:
+                            reasons = json.loads(alt['alt_reasons']) if isinstance(alt['alt_reasons'], str) else alt['alt_reasons']
+                            print(f"  추천 이유:")
+                            for i, reason in enumerate(reasons, 1):
+                                print(f"    {i}. {reason['text']}")
+                        print()
+
             return True
         else:
             if verbose:
@@ -757,16 +872,20 @@ async def analyze_all_stocks(db_manager):
 
         start_time = time.time()
 
-        # Step 1: Use AsyncBatchWeightCalculator to compute weights and conditions
+        # Step 1: Use AsyncBatchWeightCalculator to compute weights, conditions, and scenario stats
         print("Step 1: 공통 데이터 및 가중치 일괄 계산 (AsyncBatchWeightCalculator)...")
         batch_calc = AsyncBatchWeightCalculator()
         await batch_calc.initialize()
 
         batch_results = await batch_calc.process_all_stocks(symbols)
 
+        # Get pre-computed scenario stats before closing
+        scenario_stats = batch_calc.get_scenario_stats()
+
         await batch_calc.close()
 
-        print(f"가중치 계산 완료: {len(batch_results):,}개 종목\n")
+        print(f"가중치 계산 완료: {len(batch_results):,}개 종목")
+        print(f"시나리오 통계: {len(scenario_stats)}개 업종 pre-compute 완료\n")
 
         # Step 2: Process each stock with precomputed weights
         print("Step 2: 각 종목별 팩터 점수 계산 및 저장...")
@@ -781,7 +900,7 @@ async def analyze_all_stocks(db_manager):
         for batch_idx, batch in enumerate(batches, 1):
             batch_start = time.time()
 
-            # Process batch concurrently with precomputed weights
+            # Process batch concurrently with precomputed weights and scenario stats
             tasks = []
             for symbol in batch:
                 if symbol in batch_results:
@@ -794,12 +913,16 @@ async def analyze_all_stocks(db_manager):
                             analysis_date,
                             verbose=False,
                             precomputed_weights=precomputed_weights,
-                            precomputed_conditions=precomputed_conditions
+                            precomputed_conditions=precomputed_conditions,
+                            precomputed_scenario_stats=scenario_stats
                         )
                     )
                 else:
-                    # Fallback: no precomputed data
-                    tasks.append(analyze_single_stock(symbol, db_manager, analysis_date, verbose=False))
+                    # Fallback: no precomputed data (scenario_stats still available)
+                    tasks.append(analyze_single_stock(
+                        symbol, db_manager, analysis_date, verbose=False,
+                        precomputed_scenario_stats=scenario_stats
+                    ))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -939,6 +1062,7 @@ async def analyze_all_stocks_date_range(db_manager, start_date, end_date):
             await batch_calc.initialize()
 
             batch_results = await batch_calc.process_all_stocks(symbols)
+            scenario_stats = batch_calc.get_scenario_stats()
 
             await batch_calc.close()
 
@@ -950,7 +1074,7 @@ async def analyze_all_stocks_date_range(db_manager, start_date, end_date):
             date_fail = 0
 
             for batch_idx, batch in enumerate(batches, 1):
-                # Process batch concurrently with precomputed weights
+                # Process batch concurrently with precomputed weights and scenario stats
                 tasks = []
                 for symbol in batch:
                     if symbol in batch_results:
@@ -963,12 +1087,16 @@ async def analyze_all_stocks_date_range(db_manager, start_date, end_date):
                                 analysis_date,
                                 verbose=False,
                                 precomputed_weights=precomputed_weights,
-                                precomputed_conditions=precomputed_conditions
+                                precomputed_conditions=precomputed_conditions,
+                                precomputed_scenario_stats=scenario_stats
                             )
                         )
                     else:
-                        # Fallback: no precomputed data
-                        tasks.append(analyze_single_stock(symbol, db_manager, analysis_date, verbose=False))
+                        # Fallback: no precomputed data (scenario_stats still available)
+                        tasks.append(analyze_single_stock(
+                            symbol, db_manager, analysis_date, verbose=False,
+                            precomputed_scenario_stats=scenario_stats
+                        ))
 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1133,6 +1261,7 @@ async def analyze_sample_stocks_specific_dates(db_manager, sample_file='sample_s
             await batch_calc.initialize()
 
             batch_results = await batch_calc.process_all_stocks(symbols)
+            scenario_stats = batch_calc.get_scenario_stats()
 
             await batch_calc.close()
 
@@ -1147,7 +1276,7 @@ async def analyze_sample_stocks_specific_dates(db_manager, sample_file='sample_s
             date_fail = 0
 
             for batch_idx, batch in enumerate(batches, 1):
-                # Process batch concurrently with precomputed weights
+                # Process batch concurrently with precomputed weights and scenario stats
                 tasks = []
                 for symbol in batch:
                     if symbol in batch_results:
@@ -1160,12 +1289,16 @@ async def analyze_sample_stocks_specific_dates(db_manager, sample_file='sample_s
                                 analysis_date,
                                 verbose=False,
                                 precomputed_weights=precomputed_weights,
-                                precomputed_conditions=precomputed_conditions
+                                precomputed_conditions=precomputed_conditions,
+                                precomputed_scenario_stats=scenario_stats
                             )
                         )
                     else:
-                        # Fallback: no precomputed data
-                        tasks.append(analyze_single_stock(symbol, db_manager, analysis_date, verbose=False))
+                        # Fallback: no precomputed data (scenario_stats still available)
+                        tasks.append(analyze_single_stock(
+                            symbol, db_manager, analysis_date, verbose=False,
+                            precomputed_scenario_stats=scenario_stats
+                        ))
 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1241,6 +1374,38 @@ async def analyze_sample_stocks_specific_dates(db_manager, sample_file='sample_s
         return None
 
 
+async def save_trading_halted_stocks(db_manager, symbols, analysis_date):
+    """
+    Save trading halted stocks with minimal data (Option 5 helper)
+
+    Trading halted stocks are identified by: open = 0 or null AND close > 0
+    These stocks skip full quant analysis and only store:
+    - stock_name, symbol, date, final_grade='거래 정지'
+
+    Args:
+        db_manager: AsyncDatabaseManager instance
+        symbols: List of trading halted stock symbols
+        analysis_date: Analysis date
+
+    Returns:
+        int: Number of successfully saved stocks
+    """
+    success_count = 0
+    for symbol in symbols:
+        # Get stock name
+        name_query = "SELECT stock_name FROM kr_stock_basic WHERE symbol = $1"
+        name_result = await db_manager.execute_query(name_query, symbol)
+        stock_name = name_result[0]['stock_name'] if name_result else None
+
+        # Save with minimal data
+        success = await save_trading_halted_to_kr_stock_grade(
+            db_manager, symbol, analysis_date, stock_name
+        )
+        if success:
+            success_count += 1
+    return success_count
+
+
 async def analyze_all_stocks_specific_dates(db_manager, date_list):
     """
     전체 종목 특정 날짜 분석 (Option 5 - Phase 3.4)
@@ -1300,23 +1465,51 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
             print(f"[날짜 {date_idx}/{len(date_list)}] {analysis_date} - 섹터 데이터 갱신 중...")
             await db_manager.refresh_sector_performance_for_date(analysis_date)
 
-            # Get all symbols that have data on this date
+            # Get all symbols that have data on this date (with open/close for trading halt detection)
             print(f"[날짜 {date_idx}/{len(date_list)}] {analysis_date} - 종목 조회 중...")
             symbol_query = """
-            SELECT DISTINCT symbol
+            SELECT DISTINCT symbol, open, close
             FROM kr_intraday_total
             WHERE date = $1
             ORDER BY symbol
             """
             symbol_result = await db_manager.execute_query(symbol_query, analysis_date)
-            symbols = [row['symbol'] for row in symbol_result]
 
-            if not symbols:
+            if not symbol_result:
                 print(f"  [WARNING] {analysis_date}에 데이터가 있는 종목이 없습니다. 건너뜁니다.\n")
                 continue
 
-            print(f"  -> {len(symbols):,}개 종목 발견")
-            total_symbols_all_dates += len(symbols)
+            # Separate trading halted stocks from normal stocks
+            # Trading halted: open is 0 or null, but close exists (last traded price remains)
+            normal_symbols = []
+            halted_symbols = []
+            for row in symbol_result:
+                symbol = row['symbol']
+                open_price = row['open']
+                close_price = row['close']
+
+                # Trading halted condition: open = 0 or null AND close > 0
+                if (open_price is None or float(open_price) == 0) and (close_price is not None and float(close_price) > 0):
+                    halted_symbols.append(symbol)
+                else:
+                    normal_symbols.append(symbol)
+
+            # Process trading halted stocks first (save with minimal data)
+            if halted_symbols:
+                print(f"  -> 거래 정지 종목: {len(halted_symbols)}개 발견")
+                halted_success = await save_trading_halted_stocks(
+                    db_manager, halted_symbols, analysis_date
+                )
+                print(f"  -> 거래 정지 종목 저장 완료: {halted_success}개")
+
+            symbols = normal_symbols
+            print(f"  -> 분석 대상 종목: {len(symbols):,}개")
+            total_symbols_all_dates += len(symbols) + len(halted_symbols)
+
+            # Skip if no normal symbols to analyze (all are trading halted)
+            if not symbols:
+                print(f"  [INFO] {analysis_date} - 모든 종목이 거래 정지 상태입니다. 다음 날짜로 진행합니다.\n")
+                continue
 
             # Step 1: Use AsyncBatchWeightCalculator for this date
             print(f"[날짜 {date_idx}/{len(date_list)}] {analysis_date} - 가중치 계산 중...")
@@ -1324,6 +1517,7 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
             await batch_calc.initialize()
 
             batch_results = await batch_calc.process_all_stocks(symbols)
+            scenario_stats = batch_calc.get_scenario_stats()
 
             await batch_calc.close()
 
@@ -1334,9 +1528,10 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
 
             date_success = 0
             date_fail = 0
+            failed_symbols = []  # Collect failed symbols for retry
 
             for batch_idx, batch in enumerate(batches, 1):
-                # Process batch concurrently with precomputed weights
+                # Process batch concurrently with precomputed weights and scenario stats
                 tasks = []
                 for symbol in batch:
                     if symbol in batch_results:
@@ -1349,12 +1544,16 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
                                 analysis_date,
                                 verbose=False,
                                 precomputed_weights=precomputed_weights,
-                                precomputed_conditions=precomputed_conditions
+                                precomputed_conditions=precomputed_conditions,
+                                precomputed_scenario_stats=scenario_stats
                             )
                         )
                     else:
-                        # Fallback: no precomputed data
-                        tasks.append(analyze_single_stock(symbol, db_manager, analysis_date, verbose=False))
+                        # Fallback: no precomputed data (scenario_stats still available)
+                        tasks.append(analyze_single_stock(
+                            symbol, db_manager, analysis_date, verbose=False,
+                            precomputed_scenario_stats=scenario_stats
+                        ))
 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1365,12 +1564,14 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
                     if isinstance(result, Exception):
                         date_fail += 1
                         batch_fail += 1
+                        failed_symbols.append(batch[idx])  # Collect failed symbol
                     elif isinstance(result, bool) and result:
                         date_success += 1
                         batch_success += 1
                     else:
                         date_fail += 1
                         batch_fail += 1
+                        failed_symbols.append(batch[idx])  # Collect failed symbol
 
                 # Print batch progress
                 current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1379,6 +1580,55 @@ async def analyze_all_stocks_specific_dates(db_manager, date_list):
                 # Small delay between batches (Windows semaphore stabilization)
                 if batch_idx < len(batches):
                     await asyncio.sleep(0.3)
+
+            # Retry failed symbols (1 retry attempt)
+            final_failed = []
+            if failed_symbols:
+                print(f"  -> 실패 종목 {len(failed_symbols)}개 재시도 중...")
+                retry_success = 0
+
+                for symbol in failed_symbols:
+                    await asyncio.sleep(2.0)  # Wait before retry
+                    try:
+                        if symbol in batch_results:
+                            result = await analyze_single_stock(
+                                symbol,
+                                db_manager,
+                                analysis_date,
+                                verbose=False,
+                                precomputed_weights=batch_results[symbol]['weights'],
+                                precomputed_conditions=batch_results[symbol]['conditions'],
+                                precomputed_scenario_stats=scenario_stats
+                            )
+                        else:
+                            result = await analyze_single_stock(
+                                symbol, db_manager, analysis_date, verbose=False,
+                                precomputed_scenario_stats=scenario_stats
+                            )
+
+                        if result:
+                            retry_success += 1
+                            date_success += 1
+                            date_fail -= 1
+                        else:
+                            final_failed.append(symbol)
+                    except Exception as e:
+                        logger.debug(f"Retry failed for {symbol}: {e}")
+                        final_failed.append(symbol)
+
+                print(f"  -> 재시도 결과: {retry_success}/{len(failed_symbols)}개 성공")
+
+                if final_failed:
+                    failed_list = ', '.join(final_failed[:10])
+                    print(f"  -> 최종 실패 종목 ({len(final_failed)}개): {failed_list}")
+                    if len(final_failed) > 10:
+                        print(f"     ... 외 {len(final_failed) - 10}개")
+
+            # Alternative stock matching for this date (Option 5)
+            print(f"[날짜 {date_idx}/{len(date_list)}] {analysis_date} - 대체 종목 매칭 중...")
+            matcher = AlternativeStockMatcher(db_manager)
+            match_result = await matcher.match_for_date(analysis_date)
+            print(f"  -> 매칭 완료: {match_result['matched']}개 성공, {match_result['failed']}개 실패")
 
             # Log date progress
             date_time = time.time() - date_start_time

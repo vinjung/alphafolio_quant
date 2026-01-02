@@ -36,6 +36,12 @@ try:
 except ImportError:
     from kr.kr_probability_calibrator import ScenarioCalibrator
 
+# Phase 3.10: Data Prefetcher for query optimization
+try:
+    from kr_data_prefetcher import PrefetchedDataCalculator
+except ImportError:
+    from kr.kr_data_prefetcher import PrefetchedDataCalculator
+
 # Logger setup
 logging.basicConfig(
     level=logging.INFO,
@@ -50,7 +56,7 @@ class AdditionalMetricsCalculator:
     Designed for kr_stock_grade table storage
     """
 
-    def __init__(self, symbol: str, db_manager, factor_scores: Dict = None, analysis_date=None):
+    def __init__(self, symbol: str, db_manager, factor_scores: Dict = None, analysis_date=None, prefetched_data: Dict = None):
         """
         Initialize calculator
 
@@ -59,6 +65,7 @@ class AdditionalMetricsCalculator:
             db_manager: AsyncDatabaseManager instance
             factor_scores: Dict containing factor analysis results from kr_main
             analysis_date: Optional analysis date (defaults to current date)
+            prefetched_data: Optional prefetched data from KRDataPrefetcher (query optimization)
         """
         self.symbol = symbol
         self.db_manager = db_manager
@@ -66,6 +73,9 @@ class AdditionalMetricsCalculator:
         self.analysis_date = analysis_date
         # Phase 3.9: Scenario Calibrator (shared instance)
         self.calibrator = ScenarioCalibrator(db_manager)
+        # Phase 3.10: Prefetched data calculator (83% query reduction)
+        self.prefetched_data = prefetched_data
+        self.prefetch_calc = PrefetchedDataCalculator(prefetched_data) if prefetched_data else None
         logger.info(f"Additional metrics calculator initialized for {symbol}")
 
     async def execute_query(self, query: str, *params):
@@ -129,6 +139,14 @@ class AdditionalMetricsCalculator:
         Storage: volatility_annual FLOAT
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_volatility_annual()
+                if result is not None:
+                    logger.info(f"Annual volatility: {result:.2f}% (prefetched)")
+                    return result
+
+            # Fallback to DB query
             query = """
             WITH daily_returns AS (
                 SELECT
@@ -240,6 +258,14 @@ class AdditionalMetricsCalculator:
         Storage: var_95 FLOAT (negative value, %)
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_var_95()
+                if result is not None:
+                    logger.info(f"VaR 95%: -{result:.2f}% (prefetched)")
+                    return -result  # Return as negative value
+
+            # Fallback to DB query
             query = """
             WITH daily_returns AS (
                 SELECT
@@ -284,6 +310,14 @@ class AdditionalMetricsCalculator:
         Storage: cvar_95 FLOAT (negative value, %)
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_cvar_95()
+                if result is not None:
+                    logger.info(f"CVaR 95%: -{result:.2f}% (prefetched)")
+                    return -result  # Return as negative value
+
+            # Fallback to DB query
             query = """
             WITH daily_returns AS (
                 SELECT
@@ -409,6 +443,8 @@ class AdditionalMetricsCalculator:
         """
         진입 타이밍 점수 계산 (Phase Agent)
 
+        Phase 3.12: Changed from 2-week to 90-day trend for mid-term horizon alignment
+
         공식:
             entry_timing = final_score_level × 0.4
                          + final_score_trend × 0.3
@@ -422,22 +458,22 @@ class AdditionalMetricsCalculator:
         Returns:
             dict: {
                 'entry_timing_score': 진입 타이밍 점수 (0-100),
-                'score_trend_2w': 2주간 final_score 변화,
+                'score_trend_90d': 90일간 final_score 변화,
                 'price_position_52w': 52주 고저 대비 위치 (0-100%)
             }
         """
         try:
-            # 1. 2주 전 final_score 조회
+            # 1. 90일 전 final_score 조회 (Phase 3.12: 2주 → 90일)
             score_query = """
             SELECT final_score
             FROM kr_stock_grade
             WHERE symbol = $1
-                AND date <= COALESCE($2::date, CURRENT_DATE) - INTERVAL '14 days'
+                AND date <= COALESCE($2::date, CURRENT_DATE) - INTERVAL '90 days'
             ORDER BY date DESC
             LIMIT 1
             """
             score_result = await self.execute_query(score_query, self.symbol, self.analysis_date)
-            score_2w_ago = float(score_result[0]['final_score']) if score_result and score_result[0]['final_score'] else final_score
+            score_90d_ago = float(score_result[0]['final_score']) if score_result and score_result[0]['final_score'] else final_score
 
             # 2. 52주 고저 대비 위치
             position_query = """
@@ -449,6 +485,7 @@ class AdditionalMetricsCalculator:
             WHERE symbol = $1
                 AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '252 days'
                 AND date <= COALESCE($2::date, CURRENT_DATE)
+                AND close IS NOT NULL
             ORDER BY date DESC
             LIMIT 1
             """
@@ -465,10 +502,10 @@ class AdditionalMetricsCalculator:
             price_range = high_52w - low_52w
             price_position = ((current - low_52w) / price_range * 100) if price_range > 0 else 50
 
-            # 점수 계산
+            # 점수 계산 (Phase 3.12: 90일 기준)
             score_level = final_score  # 0-100
-            score_trend = final_score - score_2w_ago  # -20 ~ +20 예상
-            trend_normalized = min(100, max(0, 50 + score_trend * 2.5))  # 0-100 정규화
+            score_trend = final_score - score_90d_ago  # -30 ~ +30 예상 (90일 변화폭 증가)
+            trend_normalized = min(100, max(0, 50 + score_trend * 1.5))  # 0-100 정규화 (계수 조정)
             position_score = 100 - price_position  # 저점일수록 높은 점수
             momentum_confirm = 70 if momentum_score > 50 else 30
 
@@ -480,11 +517,11 @@ class AdditionalMetricsCalculator:
                 momentum_confirm * 0.1
             )
 
-            logger.info(f"Entry Timing: {entry_timing:.1f} (level={score_level:.1f}, trend={score_trend:+.1f}, pos={price_position:.1f}%)")
+            logger.info(f"Entry Timing 90d: {entry_timing:.1f} (level={score_level:.1f}, trend_90d={score_trend:+.1f}, pos={price_position:.1f}%)")
 
             return {
                 'entry_timing_score': round(entry_timing, 1),
-                'score_trend_2w': round(score_trend, 2),
+                'score_trend_90d': round(score_trend, 2),
                 'price_position_52w': round(price_position, 2)
             }
 
@@ -538,45 +575,496 @@ class AdditionalMetricsCalculator:
             logger.error(f"Position size calculation failed: {e}")
             return 3.0  # 기본값
 
-    def generate_action_triggers(self, final_score: float, sector_percentile: float,
-                                  stop_loss_pct: float, take_profit_pct: float) -> dict:
+    async def calculate_consecutive_trading_days(self) -> dict:
         """
-        행동 트리거 자동 생성 (Phase Agent)
-
-        Args:
-            final_score: 현재 final_score
-            sector_percentile: 섹터 내 백분위
-            stop_loss_pct: 손절 기준 %
-            take_profit_pct: 익절 기준 %
+        Calculate consecutive net buying/selling days for foreign and institutional investors.
+        Also retrieves foreign ownership rate and recent block trade info.
 
         Returns:
             dict: {
-                'buy_triggers': 매수 조건 리스트,
-                'sell_triggers': 매도 조건 리스트,
-                'hold_triggers': 보유 유지 조건 리스트
+                'foreign_consecutive': int (positive=net buy, negative=net sell),
+                'inst_consecutive': int (positive=net buy, negative=net sell),
+                'foreign_ownership_rate': float (current foreign ownership %),
+                'foreign_ownership_change_30d': float (30-day change in ownership rate),
+                'recent_block_trade': bool (block trade > 3% in last 5 days)
             }
         """
         try:
-            buy_triggers = [
-                f"final_score {final_score + 5:.0f}점 이상 상승 시",
-                "외국인 5일 연속 순매수 전환 시",
-                f"섹터 순위 상위 {max(5, sector_percentile - 10):.0f}% 진입 시"
-            ]
+            result = {
+                'foreign_consecutive': 0,
+                'inst_consecutive': 0,
+                'foreign_ownership_rate': 0.0,
+                'foreign_ownership_change_30d': 0.0,
+                'recent_block_trade': False
+            }
 
-            sell_triggers = [
-                f"final_score {final_score - 15:.0f}점 이하 하락 시",
-                f"손절선 {stop_loss_pct:.1f}% 도달 시",
-                f"익절선 +{take_profit_pct:.1f}% 도달 시",
-                "기관/외국인 10일 연속 순매도 시"
-            ]
+            # 1. Calculate consecutive trading days (last 30 days)
+            consecutive_query = """
+                SELECT date, foreign_net_volume, inst_net_volume
+                FROM kr_individual_investor_daily_trading
+                WHERE symbol = $1
+                ORDER BY date DESC
+                LIMIT 30
+            """
+            rows = await self.db_manager.execute_query(consecutive_query, self.symbol)
 
-            hold_triggers = [
-                f"final_score {final_score - 5:.0f}~{final_score + 5:.0f}점 유지 시",
-                "섹터 순위 현재 수준 유지 시",
-                "주요 지표 급변 없을 시"
-            ]
+            if rows:
+                # Calculate foreign consecutive days
+                foreign_consecutive = 0
+                for row in rows:
+                    foreign_net = row['foreign_net_volume'] or 0
+                    if foreign_consecutive == 0:
+                        # First day determines direction
+                        if foreign_net > 0:
+                            foreign_consecutive = 1
+                        elif foreign_net < 0:
+                            foreign_consecutive = -1
+                    elif foreign_consecutive > 0 and foreign_net > 0:
+                        foreign_consecutive += 1
+                    elif foreign_consecutive < 0 and foreign_net < 0:
+                        foreign_consecutive -= 1
+                    else:
+                        break
+                result['foreign_consecutive'] = foreign_consecutive
 
-            logger.info(f"Generated triggers: buy={len(buy_triggers)}, sell={len(sell_triggers)}, hold={len(hold_triggers)}")
+                # Calculate institutional consecutive days
+                inst_consecutive = 0
+                for row in rows:
+                    inst_net = row['inst_net_volume'] or 0
+                    if inst_consecutive == 0:
+                        if inst_net > 0:
+                            inst_consecutive = 1
+                        elif inst_net < 0:
+                            inst_consecutive = -1
+                    elif inst_consecutive > 0 and inst_net > 0:
+                        inst_consecutive += 1
+                    elif inst_consecutive < 0 and inst_net < 0:
+                        inst_consecutive -= 1
+                    else:
+                        break
+                result['inst_consecutive'] = inst_consecutive
+
+            # 2. Get foreign ownership rate and 30-day change
+            ownership_query = """
+                WITH recent AS (
+                    SELECT foreign_rate
+                    FROM kr_foreign_ownership
+                    WHERE symbol = $1
+                    ORDER BY date DESC
+                    LIMIT 1
+                ),
+                past AS (
+                    SELECT foreign_rate
+                    FROM kr_foreign_ownership
+                    WHERE symbol = $1
+                    AND date <= CURRENT_DATE - INTERVAL '30 days'
+                    ORDER BY date DESC
+                    LIMIT 1
+                )
+                SELECT
+                    (SELECT foreign_rate FROM recent) as current_rate,
+                    (SELECT foreign_rate FROM past) as past_rate
+            """
+            ownership_result = await self.db_manager.execute_query(ownership_query, self.symbol)
+            if ownership_result and ownership_result[0]:
+                current_rate = float(ownership_result[0]['current_rate'] or 0)
+                past_rate = float(ownership_result[0]['past_rate'] or current_rate)
+                result['foreign_ownership_rate'] = current_rate
+                result['foreign_ownership_change_30d'] = current_rate - past_rate
+
+            # 3. Check for recent block trades (last 5 days, > 3%)
+            block_query = """
+                SELECT COUNT(*) as block_count
+                FROM kr_blocktrades
+                WHERE symbol = $1
+                AND date >= CURRENT_DATE - INTERVAL '5 days'
+                AND block_volume_rate >= 3.0
+            """
+            block_result = await self.db_manager.execute_query(block_query, self.symbol)
+            if block_result and block_result[0]:
+                result['recent_block_trade'] = int(block_result[0]['block_count'] or 0) > 0
+
+            logger.info(f"Consecutive trading days: foreign={result['foreign_consecutive']}, "
+                       f"inst={result['inst_consecutive']}, ownership={result['foreign_ownership_rate']:.2f}%")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Consecutive trading days calculation failed: {e}")
+            return {
+                'foreign_consecutive': 0,
+                'inst_consecutive': 0,
+                'foreign_ownership_rate': 0.0,
+                'foreign_ownership_change_30d': 0.0,
+                'recent_block_trade': False
+            }
+
+    async def calculate_technical_trigger_conditions(self) -> dict:
+        """
+        Calculate technical indicator conditions for trigger generation.
+
+        Returns:
+            dict: {
+                'rsi_value': float,
+                'rsi_oversold': bool (RSI < 30),
+                'rsi_overbought': bool (RSI > 70),
+                'macd_bullish': bool (MACD > Signal),
+                'macd_cross_up': bool (recent golden cross),
+                'bb_lower_touch': bool (price near lower band),
+                'bb_upper_touch': bool (price near upper band),
+                'near_52w_high': bool (within 5% of 52-week high),
+                'near_52w_low': bool (within 5% of 52-week low),
+                'volume_surge': bool (volume > 200% of 20-day avg),
+                'volume_ratio': float (current vs 20-day avg)
+            }
+        """
+        try:
+            result = {
+                'rsi_value': 50.0,
+                'rsi_oversold': False,
+                'rsi_overbought': False,
+                'macd_bullish': False,
+                'macd_cross_up': False,
+                'bb_lower_touch': False,
+                'bb_upper_touch': False,
+                'near_52w_high': False,
+                'near_52w_low': False,
+                'volume_surge': False,
+                'volume_ratio': 1.0
+            }
+
+            # 1. Get latest technical indicators
+            indicator_query = """
+                SELECT rsi, macd, macd_signal,
+                       real_upper_band, real_middle_band, real_lower_band
+                FROM kr_indicators
+                WHERE symbol = $1
+                ORDER BY date DESC
+                LIMIT 2
+            """
+            indicators = await self.db_manager.execute_query(indicator_query, self.symbol)
+
+            if indicators and len(indicators) >= 1:
+                latest = indicators[0]
+                rsi = float(latest['rsi'] or 50)
+                macd = float(latest['macd'] or 0)
+                macd_signal = float(latest['macd_signal'] or 0)
+                bb_upper = float(latest['real_upper_band'] or 0)
+                bb_middle = float(latest['real_middle_band'] or 0)
+                bb_lower = float(latest['real_lower_band'] or 0)
+
+                result['rsi_value'] = rsi
+                result['rsi_oversold'] = rsi < 30
+                result['rsi_overbought'] = rsi > 70
+                result['macd_bullish'] = macd > macd_signal
+
+                # Check for MACD golden cross (today bullish, yesterday bearish)
+                if len(indicators) >= 2:
+                    prev = indicators[1]
+                    prev_macd = float(prev['macd'] or 0)
+                    prev_signal = float(prev['macd_signal'] or 0)
+                    if macd > macd_signal and prev_macd <= prev_signal:
+                        result['macd_cross_up'] = True
+
+            # 2. Get current price and check Bollinger Band position
+            price_query = """
+                SELECT close
+                FROM kr_intraday_total
+                WHERE symbol = $1
+                ORDER BY date DESC
+                LIMIT 1
+            """
+            price_result = await self.db_manager.execute_query(price_query, self.symbol)
+            if price_result and indicators:
+                current_price = float(price_result[0]['close'] or 0)
+                if bb_lower > 0 and bb_upper > 0:
+                    # Within 2% of lower band
+                    if current_price <= bb_lower * 1.02:
+                        result['bb_lower_touch'] = True
+                    # Within 2% of upper band
+                    if current_price >= bb_upper * 0.98:
+                        result['bb_upper_touch'] = True
+
+            # 3. Check 52-week high/low proximity
+            high_low_query = """
+                SELECT MAX(high) as high_52w, MIN(low) as low_52w
+                FROM kr_intraday_total
+                WHERE symbol = $1
+                AND date >= CURRENT_DATE - INTERVAL '252 days'
+            """
+            hl_result = await self.db_manager.execute_query(high_low_query, self.symbol)
+            if hl_result and hl_result[0] and price_result:
+                high_52w = float(hl_result[0]['high_52w'] or 0)
+                low_52w = float(hl_result[0]['low_52w'] or 0)
+                current_price = float(price_result[0]['close'] or 0)
+
+                if high_52w > 0:
+                    # Within 5% of 52-week high
+                    result['near_52w_high'] = current_price >= high_52w * 0.95
+                if low_52w > 0:
+                    # Within 5% of 52-week low
+                    result['near_52w_low'] = current_price <= low_52w * 1.05
+
+            # 4. Check volume surge (vs 20-day average)
+            volume_query = """
+                WITH recent_vol AS (
+                    SELECT volume
+                    FROM kr_intraday_total
+                    WHERE symbol = $1
+                    ORDER BY date DESC
+                    LIMIT 1
+                ),
+                avg_vol AS (
+                    SELECT AVG(volume) as avg_volume
+                    FROM kr_intraday_total
+                    WHERE symbol = $1
+                    AND date >= CURRENT_DATE - INTERVAL '20 days'
+                )
+                SELECT
+                    (SELECT volume FROM recent_vol) as current_volume,
+                    (SELECT avg_volume FROM avg_vol) as avg_volume
+            """
+            vol_result = await self.db_manager.execute_query(volume_query, self.symbol)
+            if vol_result and vol_result[0]:
+                current_vol = float(vol_result[0]['current_volume'] or 0)
+                avg_vol = float(vol_result[0]['avg_volume'] or 1)
+                if avg_vol > 0:
+                    volume_ratio = current_vol / avg_vol
+                    result['volume_ratio'] = round(volume_ratio, 2)
+                    result['volume_surge'] = volume_ratio >= 2.0
+
+            logger.info(f"Technical conditions: RSI={result['rsi_value']:.1f}, "
+                       f"MACD_bullish={result['macd_bullish']}, volume_ratio={result['volume_ratio']:.2f}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Technical trigger conditions calculation failed: {e}")
+            return {
+                'rsi_value': 50.0,
+                'rsi_oversold': False,
+                'rsi_overbought': False,
+                'macd_bullish': False,
+                'macd_cross_up': False,
+                'bb_lower_touch': False,
+                'bb_upper_touch': False,
+                'near_52w_high': False,
+                'near_52w_low': False,
+                'volume_surge': False,
+                'volume_ratio': 1.0
+            }
+
+    async def generate_action_triggers(
+        self,
+        final_score: float,
+        sector_percentile: float,
+        stop_loss_pct: float,
+        take_profit_pct: float,
+        consecutive_data: dict,
+        technical_conditions: dict,
+        market_sentiment: str,
+        entry_timing_score: float,
+        volatility_annual: float,
+        max_drawdown_1y: float,
+        momentum_score: float,
+        value_score: float,
+        quality_score: float
+    ) -> dict:
+        """
+        Dynamic Action Trigger Generation (Phase 3.13)
+
+        Generates context-aware triggers based on:
+        - Supply/Demand: Foreign/Institutional consecutive trading days
+        - Technical: RSI, MACD, Bollinger Bands, 52-week high/low, volume
+        - Quant Model: final_score, sector rank, entry timing, factor scores
+        - Risk: Stop loss, take profit, volatility, max drawdown
+        - Macro: Market sentiment (PANIC/FEAR/NEUTRAL/GREED/OVERHEATED)
+
+        Args:
+            final_score: Current final_score (0-100)
+            sector_percentile: Sector percentile rank (0-100, lower is better)
+            stop_loss_pct: Stop loss percentage (negative)
+            take_profit_pct: Take profit percentage (positive)
+            consecutive_data: Dict with foreign/inst consecutive days
+            technical_conditions: Dict with RSI, MACD, BB, volume conditions
+            market_sentiment: Market regime (PANIC/FEAR/NEUTRAL/GREED/OVERHEATED)
+            entry_timing_score: Entry timing score (0-100)
+            volatility_annual: Annualized volatility (%)
+            max_drawdown_1y: 1-year max drawdown (negative %)
+            momentum_score: Momentum factor score (0-100)
+            value_score: Value factor score (0-100)
+            quality_score: Quality factor score (0-100)
+
+        Returns:
+            dict: {
+                'buy_triggers': List of buy conditions,
+                'sell_triggers': List of sell conditions,
+                'hold_triggers': List of hold conditions
+            }
+        """
+        try:
+            buy_triggers = []
+            sell_triggers = []
+            hold_triggers = []
+
+            # Extract consecutive data
+            foreign_consec = consecutive_data.get('foreign_consecutive', 0)
+            inst_consec = consecutive_data.get('inst_consecutive', 0)
+            foreign_rate = consecutive_data.get('foreign_ownership_rate', 0)
+            foreign_change = consecutive_data.get('foreign_ownership_change_30d', 0)
+            recent_block = consecutive_data.get('recent_block_trade', False)
+
+            # Extract technical conditions
+            rsi_value = technical_conditions.get('rsi_value', 50)
+            rsi_oversold = technical_conditions.get('rsi_oversold', False)
+            rsi_overbought = technical_conditions.get('rsi_overbought', False)
+            macd_bullish = technical_conditions.get('macd_bullish', False)
+            macd_cross_up = technical_conditions.get('macd_cross_up', False)
+            bb_lower = technical_conditions.get('bb_lower_touch', False)
+            bb_upper = technical_conditions.get('bb_upper_touch', False)
+            near_52w_high = technical_conditions.get('near_52w_high', False)
+            near_52w_low = technical_conditions.get('near_52w_low', False)
+            volume_surge = technical_conditions.get('volume_surge', False)
+            volume_ratio = technical_conditions.get('volume_ratio', 1.0)
+
+            # ================================================================
+            # BUY TRIGGERS (context-aware)
+            # ================================================================
+
+            # 1. Supply/Demand Triggers
+            if foreign_consec > 0:
+                # Already in net buying streak - trigger for continuation
+                buy_triggers.append(f"외국인 {foreign_consec + 5}일 연속 순매수 유지 시")
+            elif foreign_consec < 0:
+                # In net selling streak - trigger for reversal
+                buy_triggers.append("외국인 5일 연속 순매수 전환 시")
+            else:
+                buy_triggers.append("외국인 순매수 시작 시")
+
+            if inst_consec > 0:
+                buy_triggers.append(f"기관 {inst_consec + 5}일 연속 순매수 유지 시")
+            elif inst_consec <= 0:
+                buy_triggers.append("기관 5일 연속 순매수 전환 시")
+
+            # Foreign ownership threshold
+            if foreign_rate < 30:
+                buy_triggers.append(f"외국인 지분율 {foreign_rate + 2:.1f}% 돌파 시")
+
+            # 2. Technical Triggers (conditional)
+            if rsi_oversold:
+                buy_triggers.append(f"RSI {rsi_value:.0f} -> 35 이상 반등 시")
+            elif rsi_value < 40:
+                buy_triggers.append("RSI 40 이상 회복 시")
+
+            if not macd_bullish:
+                buy_triggers.append("MACD 골든크로스 발생 시")
+
+            if bb_lower:
+                buy_triggers.append("볼린저밴드 중심선 회복 시")
+
+            if near_52w_low:
+                buy_triggers.append("52주 신저가 대비 10% 반등 시")
+            elif not near_52w_high:
+                buy_triggers.append("52주 신고가 돌파 시")
+
+            if not volume_surge:
+                buy_triggers.append("거래량 20일 평균 200% 돌파 시")
+
+            # 3. Quant Model Triggers
+            buy_triggers.append(f"final_score {final_score + 5:.0f}점 이상 상승 시")
+
+            if sector_percentile > 10:
+                buy_triggers.append(f"섹터 순위 상위 {max(5, sector_percentile - 10):.0f}% 진입 시")
+
+            if entry_timing_score < 80:
+                buy_triggers.append(f"Entry Timing {80}점 이상 도달 시")
+
+            # 4. Market Sentiment Adjustments
+            if market_sentiment in ['PANIC', 'FEAR']:
+                buy_triggers.append("시장 심리 NEUTRAL 이상 회복 시")
+
+            # ================================================================
+            # SELL TRIGGERS (context-aware)
+            # ================================================================
+
+            # 1. Supply/Demand Triggers
+            if foreign_consec > 0:
+                sell_triggers.append("외국인 5일 연속 순매도 전환 시")
+            elif foreign_consec < 0:
+                sell_triggers.append(f"외국인 {abs(foreign_consec) + 5}일 연속 순매도 지속 시")
+
+            if inst_consec > 0:
+                sell_triggers.append("기관 5일 연속 순매도 전환 시")
+            elif inst_consec < 0:
+                sell_triggers.append(f"기관 {abs(inst_consec) + 5}일 연속 순매도 지속 시")
+
+            # 2. Technical Triggers
+            if rsi_overbought:
+                sell_triggers.append(f"RSI {rsi_value:.0f} -> 65 이하 하락 시")
+            elif rsi_value > 60:
+                sell_triggers.append("RSI 70 이상 과매수 진입 시")
+
+            if macd_bullish:
+                sell_triggers.append("MACD 데드크로스 발생 시")
+
+            if bb_upper:
+                sell_triggers.append("볼린저밴드 상단 이탈 후 하락 시")
+
+            if near_52w_high:
+                sell_triggers.append("52주 신고가 대비 5% 하락 시")
+
+            # 3. Risk Management Triggers
+            sell_triggers.append(f"손절선 {stop_loss_pct:.1f}% 도달 시")
+            sell_triggers.append(f"익절선 +{take_profit_pct:.1f}% 도달 시")
+
+            # 4. Quant Model Triggers
+            sell_triggers.append(f"final_score {max(0, final_score - 15):.0f}점 이하 하락 시")
+
+            if volatility_annual > 40:
+                sell_triggers.append(f"변동성 {volatility_annual + 10:.0f}% 이상 급등 시")
+
+            if max_drawdown_1y and max_drawdown_1y < -25:
+                sell_triggers.append(f"MDD {max_drawdown_1y - 5:.0f}% 이하 확대 시")
+
+            # 5. Market Sentiment Adjustments
+            if market_sentiment in ['GREED', 'OVERHEATED']:
+                sell_triggers.append("시장 심리 OVERHEATED 진입 시 일부 차익실현")
+
+            # ================================================================
+            # HOLD TRIGGERS (stability conditions)
+            # ================================================================
+
+            # 1. Supply/Demand Stability
+            if foreign_consec > 0:
+                hold_triggers.append(f"외국인 순매수 기조 유지 시 (현재 {foreign_consec}일)")
+            if inst_consec > 0:
+                hold_triggers.append(f"기관 순매수 기조 유지 시 (현재 {inst_consec}일)")
+
+            # 2. Score Stability
+            hold_triggers.append(f"final_score {max(0, final_score - 5):.0f}~{min(100, final_score + 5):.0f}점 유지 시")
+
+            # 3. Technical Stability
+            if 40 <= rsi_value <= 60:
+                hold_triggers.append(f"RSI 40~60 중립구간 유지 시 (현재 {rsi_value:.0f})")
+
+            if macd_bullish:
+                hold_triggers.append("MACD 상승 추세 유지 시")
+
+            # 4. Volatility Stability
+            if volatility_annual <= 35:
+                hold_triggers.append(f"변동성 35% 이내 유지 시 (현재 {volatility_annual:.1f}%)")
+            else:
+                hold_triggers.append("변동성 안정화 시")
+
+            # 5. Sector Position
+            hold_triggers.append(f"섹터 순위 상위 {sector_percentile + 10:.0f}% 이내 유지 시")
+
+            # 6. Market Stability
+            if market_sentiment == 'NEUTRAL':
+                hold_triggers.append("시장 심리 NEUTRAL 유지 시")
+
+            logger.info(f"Generated dynamic triggers: buy={len(buy_triggers)}, "
+                       f"sell={len(sell_triggers)}, hold={len(hold_triggers)}")
 
             return {
                 'buy_triggers': buy_triggers,
@@ -587,143 +1075,277 @@ class AdditionalMetricsCalculator:
         except Exception as e:
             logger.error(f"Trigger generation failed: {e}")
             return {
-                'buy_triggers': [],
-                'sell_triggers': [],
-                'hold_triggers': []
+                'buy_triggers': ["데이터 부족으로 트리거 생성 불가"],
+                'sell_triggers': ["데이터 부족으로 트리거 생성 불가"],
+                'hold_triggers': ["데이터 부족으로 트리거 생성 불가"]
             }
 
-    async def calculate_scenario_probability(self, final_score: float, industry: str) -> dict:
-        """
-        백테스트 기반 시나리오 확률 계산 (Phase Agent)
+    # ========================================================================
+    # Macro Probability Mapping (based on market_sentiment)
+    # OVERHEATED, GREED, NEUTRAL, FEAR, PANIC
+    # ========================================================================
+    MACRO_PROBABILITY = {
+        'OVERHEATED': {'bullish': 0.30, 'sideways': 0.40, 'bearish': 0.30},  # High risk of correction
+        'GREED': {'bullish': 0.50, 'sideways': 0.35, 'bearish': 0.15},       # Bull market
+        'NEUTRAL': {'bullish': 0.35, 'sideways': 0.40, 'bearish': 0.25},     # Base rate
+        'FEAR': {'bullish': 0.25, 'sideways': 0.35, 'bearish': 0.40},        # Cautious
+        'PANIC': {'bullish': 0.20, 'sideways': 0.30, 'bearish': 0.50}        # High downside risk
+    }
 
-        과정:
-            1. 과거 유사 조건 케이스 검색 (final_score ±5, 동일 섹터)
-            2. 3개월 후 결과 집계:
-               - 강세: >+10%
-               - 횡보: -10% ~ +10%
-               - 약세: <-10%
+    async def calculate_scenario_probability(
+        self,
+        final_score: float,
+        industry: str,
+        market_sentiment: str = None,
+        precomputed_scenario_stats: dict = None
+    ) -> dict:
+        """
+        HYBRID 시나리오 확률 계산 (Phase 3.10 + Phase 3.12)
+
+        Phase 3.12: Changed from 60-66 days to 90-96 days backtest horizon
+
+        Macro (Top-Down) + Backtest (Bottom-Up) 결합:
+        - Step 1: Macro 확률 가져오기 (market_sentiment 기반)
+        - Step 2: Backtest 확률 가져오기 (90일 후 수익률 기반)
+        - Step 3: Confidence 기반 가중치 계산
+          - w_backtest = min(0.7, sample_count / 50)
+          - w_macro = 1 - w_backtest
+        - Step 4: 기존 Calibrator 적용
+
+        Optimization (2,763 queries -> 0):
+        - precomputed_scenario_stats가 있으면 사용 (배치 처리 시)
+        - 없으면 기존 DB 쿼리로 fallback (단일 종목 분석 시)
 
         Args:
             final_score: 현재 final_score
             industry: 업종
+            market_sentiment: 시장 심리 (OVERHEATED/GREED/NEUTRAL/FEAR/PANIC)
+            precomputed_scenario_stats: 사전 계산된 시나리오 통계 {industry: {score_bucket: stats}}
 
         Returns:
-            dict: 시나리오 확률 및 예상 수익률
+            dict: 시나리오 확률 및 90일 후 예상 수익률
         """
         try:
-            query = """
-            WITH similar_cases AS (
+            # ================================================================
+            # Step 1: Get Macro-based probability (Top-Down)
+            # ================================================================
+            if market_sentiment and market_sentiment in self.MACRO_PROBABILITY:
+                macro_prob = self.MACRO_PROBABILITY[market_sentiment]
+            else:
+                # Fallback to NEUTRAL
+                macro_prob = self.MACRO_PROBABILITY['NEUTRAL']
+                market_sentiment = 'NEUTRAL'
+
+            macro_bull = macro_prob['bullish']
+            macro_bear = macro_prob['bearish']
+            macro_sideways = macro_prob['sideways']
+
+            # ================================================================
+            # Step 2: Get Backtest-based probability (Bottom-Up)
+            # Use precomputed stats if available, otherwise query DB
+            # ================================================================
+            backtest_stats = None
+            score_bucket = int(final_score // 10) * 10  # 10점 단위 버킷
+
+            # Try precomputed stats first
+            if precomputed_scenario_stats and industry in precomputed_scenario_stats:
+                industry_stats = precomputed_scenario_stats[industry]
+                # Try exact bucket, then adjacent buckets
+                if score_bucket in industry_stats:
+                    backtest_stats = industry_stats[score_bucket]
+                elif score_bucket - 10 in industry_stats:
+                    backtest_stats = industry_stats[score_bucket - 10]
+                elif score_bucket + 10 in industry_stats:
+                    backtest_stats = industry_stats[score_bucket + 10]
+
+            # Fallback to DB query if no precomputed stats
+            # Phase 3.12: Changed from 60-66 days to 90-96 days for mid-term horizon alignment
+            if backtest_stats is None:
+                query = """
+                WITH similar_cases AS (
+                    SELECT
+                        g.symbol,
+                        g.date as analysis_date,
+                        g.final_score,
+                        current_price.close as current_close,
+                        future_price.close as future_close,
+                        CASE
+                            WHEN future_price.close IS NOT NULL AND current_price.close > 0
+                            THEN (future_price.close - current_price.close) / current_price.close * 100
+                            ELSE NULL
+                        END as return_3m
+                    FROM kr_stock_grade g
+                    JOIN kr_stock_detail d ON g.symbol = d.symbol
+                    JOIN kr_intraday_total current_price
+                        ON g.symbol = current_price.symbol AND g.date = current_price.date
+                    LEFT JOIN LATERAL (
+                        SELECT close
+                        FROM kr_intraday_total
+                        WHERE symbol = g.symbol
+                            AND date >= g.date + INTERVAL '90 days'
+                            AND date <= g.date + INTERVAL '96 days'
+                        ORDER BY date
+                        LIMIT 1
+                    ) future_price ON true
+                    WHERE g.final_score BETWEEN $1 - 5 AND $1 + 5
+                        AND d.industry = $2
+                        AND g.date < CURRENT_DATE - INTERVAL '93 days'
+                        AND future_price.close IS NOT NULL
+                )
                 SELECT
-                    g.symbol,
-                    g.date as analysis_date,
-                    g.final_score,
-                    current_price.close as current_close,
-                    future_price.close as future_close,
-                    CASE
-                        WHEN future_price.close IS NOT NULL AND current_price.close > 0
-                        THEN (future_price.close - current_price.close) / current_price.close * 100
-                        ELSE NULL
-                    END as return_3m
-                FROM kr_stock_grade g
-                JOIN kr_stock_detail d ON g.symbol = d.symbol
-                JOIN kr_intraday_total current_price
-                    ON g.symbol = current_price.symbol AND g.date = current_price.date
-                LEFT JOIN LATERAL (
-                    SELECT close
-                    FROM kr_intraday_total
-                    WHERE symbol = g.symbol
-                        AND date >= g.date + INTERVAL '60 days'
-                        AND date <= g.date + INTERVAL '66 days'
-                    ORDER BY date
-                    LIMIT 1
-                ) future_price ON true
-                WHERE g.final_score BETWEEN $1 - 5 AND $1 + 5
-                    AND d.industry = $2
-                    AND g.date < CURRENT_DATE - INTERVAL '63 days'
-                    AND future_price.close IS NOT NULL
-            )
-            SELECT
-                COUNT(*) as total_count,
-                COUNT(*) FILTER (WHERE return_3m > 10) as bullish_count,
-                COUNT(*) FILTER (WHERE return_3m BETWEEN -10 AND 10) as sideways_count,
-                COUNT(*) FILTER (WHERE return_3m < -10) as bearish_count,
-                ROUND(AVG(return_3m) FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_avg,
-                ROUND(AVG(return_3m) FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_avg,
-                ROUND(AVG(return_3m) FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_avg,
-                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
-                    FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_lower,
-                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
-                    FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_upper,
-                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
-                    FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_lower,
-                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
-                    FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_upper
-            FROM similar_cases
-            """
+                    COUNT(*) as total_count,
+                    COUNT(*) FILTER (WHERE return_3m > 10) as bullish_count,
+                    COUNT(*) FILTER (WHERE return_3m BETWEEN -10 AND 10) as sideways_count,
+                    COUNT(*) FILTER (WHERE return_3m < -10) as bearish_count,
+                    ROUND(AVG(return_3m)::numeric, 2) as avg_return,
+                    ROUND(AVG(return_3m) FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_avg,
+                    ROUND(AVG(return_3m) FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_avg,
+                    ROUND(AVG(return_3m) FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_avg,
+                    ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_lower,
+                    ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_upper,
+                    ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_lower,
+                    ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_upper,
+                    ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_lower,
+                    ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                        FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_upper
+                FROM similar_cases
+                """
 
-            result = await self.execute_query(query, final_score, industry)
+                result = await self.execute_query(query, final_score, industry)
 
-            if not result or not result[0]['total_count'] or result[0]['total_count'] < 10:
-                # 샘플 부족 시 기본값
-                logger.warning(f"Insufficient samples for scenario analysis (industry={industry})")
-                return {
-                    'scenario_bullish_prob': 33,
-                    'scenario_sideways_prob': 34,
-                    'scenario_bearish_prob': 33,
-                    'scenario_bullish_return': "+10~20%",
-                    'scenario_sideways_return': "-5~+5%",
-                    'scenario_bearish_return': "-15~-10%",
-                    'scenario_sample_count': 0
-                }
+                if result and result[0]['total_count'] and result[0]['total_count'] >= 10:
+                    backtest_stats = {
+                        'total_count': result[0]['total_count'],
+                        'bullish_count': result[0]['bullish_count'] or 0,
+                        'sideways_count': result[0]['sideways_count'] or 0,
+                        'bearish_count': result[0]['bearish_count'] or 0,
+                        'avg_return': float(result[0]['avg_return']) if result[0]['avg_return'] else None,
+                        'bullish_lower': result[0]['bullish_lower'] or 10,
+                        'bullish_upper': result[0]['bullish_upper'] or 25,
+                        'bearish_lower': result[0]['bearish_lower'] or -20,
+                        'bearish_upper': result[0]['bearish_upper'] or -10,
+                        'sideways_lower': result[0]['sideways_lower'] or -5,
+                        'sideways_upper': result[0]['sideways_upper'] or 5
+                    }
 
-            total = result[0]['total_count']
-            bullish = result[0]['bullish_count'] or 0
-            sideways = result[0]['sideways_count'] or 0
-            bearish = result[0]['bearish_count'] or 0
+            # Extract backtest probabilities
+            if backtest_stats and backtest_stats.get('total_count', 0) >= 5:
+                total = backtest_stats['total_count']
+                bullish = backtest_stats['bullish_count']
+                sideways = backtest_stats['sideways_count']
+                bearish = backtest_stats['bearish_count']
 
-            # 확률 계산 (raw probability)
-            raw_bullish = round(bullish / total * 100) if total > 0 else 33
-            raw_sideways = round(sideways / total * 100) if total > 0 else 34
-            raw_bearish = round(bearish / total * 100) if total > 0 else 33
+                backtest_bull = bullish / total
+                backtest_bear = bearish / total
+                backtest_sideways = sideways / total
+                sample_count = total
 
-            # Phase 3.9: 캘리브레이션 적용
-            # Get theme from kr_stock_detail table
+                # Return ranges from backtest
+                bullish_lower = backtest_stats.get('bullish_lower', 10)
+                bullish_upper = backtest_stats.get('bullish_upper', 25)
+                bearish_lower = backtest_stats.get('bearish_lower', -20)
+                bearish_upper = backtest_stats.get('bearish_upper', -10)
+                sideways_lower = backtest_stats.get('sideways_lower', -5)
+                sideways_upper = backtest_stats.get('sideways_upper', 5)
+
+                # Average return for bearish cap (Phase 3.9.1)
+                backtest_avg_return = backtest_stats.get('avg_return', None)
+            else:
+                # No backtest data available
+                backtest_bull = 0.33
+                backtest_bear = 0.33
+                backtest_sideways = 0.34
+                sample_count = 0
+                bullish_lower, bullish_upper = 10, 25
+                bearish_lower, bearish_upper = -20, -10
+                sideways_lower, sideways_upper = -5, 5
+                backtest_avg_return = None
+                logger.warning(f"Insufficient backtest samples (industry={industry})")
+
+            # ================================================================
+            # Step 3: Calculate confidence-based weights
+            # More samples = more trust in backtest (max 70%)
+            # ================================================================
+            if sample_count > 0:
+                w_backtest = min(0.70, sample_count / 50)
+            else:
+                w_backtest = 0.0  # No backtest data, use macro only
+            w_macro = 1.0 - w_backtest
+
+            # ================================================================
+            # Step 4: Combine probabilities with weighted average
+            # ================================================================
+            hybrid_bull = w_macro * macro_bull + w_backtest * backtest_bull
+            hybrid_bear = w_macro * macro_bear + w_backtest * backtest_bear
+            hybrid_sideways = 1.0 - hybrid_bull - hybrid_bear
+
+            # Convert to percentage (0-100)
+            raw_bullish = round(hybrid_bull * 100)
+            raw_bearish = round(hybrid_bear * 100)
+            raw_sideways = 100 - raw_bullish - raw_bearish
+
+            # ================================================================
+            # Step 5: Apply existing calibration (theme, regime adjustments)
+            # ================================================================
             theme_query = """
             SELECT theme FROM kr_stock_detail WHERE symbol = $1
             """
             theme_result = await self.execute_query(theme_query, self.symbol)
             theme = theme_result[0]['theme'] if theme_result and theme_result[0]['theme'] else 'Others'
 
-            # Apply calibration
+            # Apply calibration (Phase 3.9.1: added backtest_avg_return for bearish cap)
             calibrated = self.calibrator.calibrate_probabilities(
                 raw_bullish=raw_bullish,
                 raw_bearish=raw_bearish,
                 raw_sideways=raw_sideways,
                 final_score=final_score,
-                theme=theme
+                theme=theme,
+                backtest_avg_return=backtest_avg_return
             )
 
             bullish_prob = calibrated['bullish']
             sideways_prob = calibrated['sideways']
             bearish_prob = calibrated['bearish']
 
-            # 예상 수익률 범위
-            bullish_lower = result[0]['bullish_lower'] or 10
-            bullish_upper = result[0]['bullish_upper'] or 25
-            bearish_lower = result[0]['bearish_lower'] or -20
-            bearish_upper = result[0]['bearish_upper'] or -10
-
-            logger.info(f"Scenario raw: bullish={raw_bullish}%, sideways={raw_sideways}%, bearish={raw_bearish}% (n={total})")
+            logger.info(f"Hybrid prob - macro_w={w_macro:.2f}, backtest_w={w_backtest:.2f}, "
+                       f"samples={sample_count}, sentiment={market_sentiment}, precomputed={'Yes' if precomputed_scenario_stats else 'No'}")
+            logger.info(f"Scenario hybrid: bullish={raw_bullish}%, sideways={raw_sideways}%, bearish={raw_bearish}%")
             logger.info(f"Scenario calibrated: bullish={bullish_prob}%, sideways={sideways_prob}%, bearish={bearish_prob}% [theme={theme}]")
+
+            # Build scenario return strings (Phase 3.9.1: use theme-specific P25~P75 ranges)
+            # Priority: Theme-specific ranges > Backtest ranges > Default ranges
+            theme_bull_range = self.calibrator.get_return_range(theme, 'bullish')
+            theme_side_range = self.calibrator.get_return_range(theme, 'sideways')
+            theme_bear_range = self.calibrator.get_return_range(theme, 'bearish')
+
+            # Use theme-specific ranges if available, otherwise fall back to backtest data
+            final_bull_lower = theme_bull_range[0] if theme else bullish_lower
+            final_bull_upper = theme_bull_range[1] if theme else bullish_upper
+            final_side_lower = theme_side_range[0] if theme else sideways_lower
+            final_side_upper = theme_side_range[1] if theme else sideways_upper
+            final_bear_lower = theme_bear_range[0] if theme else bearish_lower
+            final_bear_upper = theme_bear_range[1] if theme else bearish_upper
+
+            scenario_bullish_return = f"+{final_bull_lower:.0f}~+{final_bull_upper:.0f}%"
+            scenario_sideways_return = f"{final_side_lower:+.0f}~{final_side_upper:+.0f}%"
+            scenario_bearish_return = f"{final_bear_upper:.0f}~{final_bear_lower:.0f}%"
 
             return {
                 'scenario_bullish_prob': bullish_prob,
                 'scenario_sideways_prob': sideways_prob,
                 'scenario_bearish_prob': bearish_prob,
-                'scenario_bullish_return': f"+{bullish_lower:.0f}~+{bullish_upper:.0f}%",
-                'scenario_sideways_return': "-10~+10%",
-                'scenario_bearish_return': f"{bearish_upper:.0f}~{bearish_lower:.0f}%",
-                'scenario_sample_count': total
+                'scenario_bullish_return': scenario_bullish_return,
+                'scenario_sideways_return': scenario_sideways_return,
+                'scenario_bearish_return': scenario_bearish_return,
+                'scenario_sample_count': sample_count,
+                'macro_weight': round(w_macro, 2),
+                'backtest_weight': round(w_backtest, 2),
+                'market_sentiment': market_sentiment
             }
 
         except Exception as e:
@@ -732,10 +1354,13 @@ class AdditionalMetricsCalculator:
                 'scenario_bullish_prob': 33,
                 'scenario_sideways_prob': 34,
                 'scenario_bearish_prob': 33,
-                'scenario_bullish_return': "+10~20%",
+                'scenario_bullish_return': "+10~+20%",
                 'scenario_sideways_return': "-5~+5%",
-                'scenario_bearish_return': "-15~-10%",
-                'scenario_sample_count': 0
+                'scenario_bearish_return': "-10~-15%",
+                'scenario_sample_count': 0,
+                'macro_weight': None,
+                'backtest_weight': None,
+                'market_sentiment': None
             }
 
     async def calculate_investor_flow(self) -> Tuple[Optional[int], Optional[int]]:
@@ -746,6 +1371,14 @@ class AdditionalMetricsCalculator:
         Storage: inst_net_30d BIGINT, foreign_net_30d BIGINT
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                inst_net, foreign_net = self.prefetch_calc.calculate_investor_flow_30d()
+                if inst_net is not None or foreign_net is not None:
+                    logger.info(f"30-day flow (prefetched) - Institution: {inst_net:,}, Foreign: {foreign_net:,}")
+                    return inst_net, foreign_net
+
+            # Fallback to DB query
             query = """
             SELECT
                 SUM(inst_net_volume) as inst_net_30d,
@@ -880,6 +1513,14 @@ class AdditionalMetricsCalculator:
         Storage: max_drawdown_1y FLOAT (negative value, %)
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_max_drawdown_1y()
+                if result is not None:
+                    logger.info(f"Max drawdown (1Y): {result:.2f}% (prefetched)")
+                    return result
+
+            # Fallback to DB query
             query = """
             WITH daily_prices AS (
                 SELECT
@@ -986,6 +1627,14 @@ class AdditionalMetricsCalculator:
             dict with keys: support_1, support_2, resistance_1, resistance_2
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_support_resistance()
+                if result and any(v is not None for v in result.values()):
+                    logger.info(f"Support/Resistance (prefetched): S1={result['support_1']}, R1={result['resistance_1']}")
+                    return result
+
+            # Fallback to DB query
             # Get recent price data (20 days for short-term, 60 days for mid-term levels)
             query = """
             WITH recent_prices AS (
@@ -1089,21 +1738,32 @@ class AdditionalMetricsCalculator:
                 'resistance_2': None
             }
 
-    async def calculate_supertrend(self, period: int = 10, multiplier: float = 3.0) -> Dict[str, Optional[any]]:
+    async def calculate_supertrend(self, period: int = 90, multiplier: float = 2.0) -> Dict[str, Optional[any]]:
         """
         11. Calculate SuperTrend indicator
         Uses ATR (Average True Range) for trend detection
 
         Storage: supertrend_value DECIMAL(21,2), trend TEXT, signal TEXT
 
+        Phase 3.12: Changed from 10-day to 90-day for mid-term horizon alignment
+        Multiplier reduced from 3.0 to 2.0 for long-term trend sensitivity
+
         Args:
-            period: ATR calculation period (default: 10)
-            multiplier: ATR multiplier (default: 3.0)
+            period: ATR calculation period (default: 90)
+            multiplier: ATR multiplier (default: 2.0)
 
         Returns:
             dict with keys: supertrend_value, trend, signal
         """
         try:
+            # Phase 3.10: Use prefetched data if available
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_supertrend(period, multiplier)
+                if result and result.get('supertrend_value') is not None:
+                    logger.info(f"SuperTrend (prefetched): {result['supertrend_value']:.2f}, trend={result['trend']}")
+                    return result
+
+            # Fallback to DB query
             # Get recent price data for ATR calculation
             query = """
             WITH price_data AS (
@@ -1115,7 +1775,7 @@ class AdditionalMetricsCalculator:
                     LAG(close) OVER (ORDER BY date) as prev_close
                 FROM kr_intraday_total
                 WHERE symbol = $1
-                    AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '30 days'
+                    AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '120 days'
                     AND date <= COALESCE($2::date, CURRENT_DATE)
                     AND high IS NOT NULL
                     AND low IS NOT NULL
@@ -1212,20 +1872,30 @@ class AdditionalMetricsCalculator:
                 'signal': None
             }
 
-    async def calculate_relative_strength(self, period: int = 20) -> Dict[str, Optional[any]]:
+    async def calculate_relative_strength(self, period: int = 90) -> Dict[str, Optional[any]]:
         """
         12-13. Calculate Relative Strength (RS) vs market index
         Measures stock performance relative to its market (KOSPI/KOSDAQ)
 
         Storage: rs_value DECIMAL(21,2), rs_rank TEXT
 
+        Phase 3.12: Changed from 20-day to 90-day for mid-term horizon alignment
+
         Args:
-            period: Comparison period in days (default: 20)
+            period: Comparison period in days (default: 90)
 
         Returns:
             dict with keys: rs_value, rs_rank
         """
         try:
+            # Phase 3.10: Use prefetched data if available (for RS value calculation)
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_relative_strength()
+                if result and result.get('rs_value') is not None:
+                    logger.info(f"Relative Strength (prefetched): RS={result['rs_value']:.2f}")
+                    return result
+
+            # Fallback to DB query
             # Get stock's exchange first
             query_exchange = """
             SELECT exchange
@@ -1945,8 +2615,9 @@ class AdditionalMetricsCalculator:
                 logger.info("Sector Rotation: Invalid MV data, returning neutral")
                 return 50, None, None, None
 
-            # Step 3: Calculate percentile and score (기존 로직 유지)
-            percentile = (1 - (current_sector_rank - 1) / total_sectors) * 100
+            # Step 3: Calculate percentile and score
+            # percentile = "상위 X%" (e.g., rank 8 out of 17 = top 47.06%)
+            percentile = (current_sector_rank / total_sectors) * 100
 
             # Score based on rank
             score = 50  # Default neutral
@@ -2021,6 +2692,17 @@ class AdditionalMetricsCalculator:
             - Calmar Ratio: Return / Max Drawdown
         """
         try:
+            # Phase 3.10: Use prefetched data if available (eliminates heavy window function queries)
+            if self.prefetch_calc:
+                result = self.prefetch_calc.calculate_risk_adjusted_returns()
+                if result and any(v is not None for v in result.values()):
+                    sharpe_str = f"{result['sharpe_ratio']:.3f}" if result['sharpe_ratio'] is not None else "N/A"
+                    sortino_str = f"{result['sortino_ratio']:.3f}" if result['sortino_ratio'] is not None else "N/A"
+                    calmar_str = f"{result['calmar_ratio']:.3f}" if result['calmar_ratio'] is not None else "N/A"
+                    logger.info(f"[{self.symbol}] Risk-Adjusted Returns (prefetched): Sharpe={sharpe_str}, Sortino={sortino_str}, Calmar={calmar_str}")
+                    return result
+
+            # Fallback to DB query
             # Risk-free rate (3.5% annual)
             rf_annual = 3.5
             holding_days = 60
@@ -2036,7 +2718,9 @@ class AdditionalMetricsCalculator:
                     LAST_VALUE(close) OVER (ORDER BY date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) as end_price,
                     (close / LAG(close, 1) OVER (ORDER BY date) - 1) * 100 as daily_return
                 FROM kr_intraday_total
-                WHERE symbol = $1 AND date >= CURRENT_DATE - INTERVAL '60 days'
+                WHERE symbol = $1
+                    AND date <= COALESCE($2::date, CURRENT_DATE)
+                    AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '60 days'
                 ORDER BY date
             )
             SELECT
@@ -2047,7 +2731,7 @@ class AdditionalMetricsCalculator:
             WHERE daily_return IS NOT NULL
             """
 
-            result = await self.execute_query(return_query, self.symbol)
+            result = await self.execute_query(return_query, self.symbol, self.analysis_date)
 
             if not result or len(result) == 0:
                 logger.warning(f"[{self.symbol}] No return data for risk-adjusted metrics")
@@ -2077,7 +2761,9 @@ class AdditionalMetricsCalculator:
                 SELECT
                     (close / LAG(close, 1) OVER (ORDER BY date) - 1) * 100 as daily_return
                 FROM kr_intraday_total
-                WHERE symbol = $1 AND date >= CURRENT_DATE - INTERVAL '60 days'
+                WHERE symbol = $1
+                    AND date <= COALESCE($2::date, CURRENT_DATE)
+                    AND date >= COALESCE($2::date, CURRENT_DATE) - INTERVAL '60 days'
                 ORDER BY date
             )
             SELECT
@@ -2087,7 +2773,7 @@ class AdditionalMetricsCalculator:
             WHERE daily_return < 0 AND daily_return IS NOT NULL
             """
 
-            downside_result = await self.execute_query(downside_query, self.symbol)
+            downside_result = await self.execute_query(downside_query, self.symbol, self.analysis_date)
 
             if downside_result and len(downside_result) > 0 and downside_result[0]['downside_deviation']:
                 downside_deviation = float(downside_result[0]['downside_deviation'])
@@ -2254,6 +2940,63 @@ class AdditionalMetricsCalculator:
         logger.info(f"  - Phase 3.2 Signal: 1 score (Sector Rotation)")
         logger.info(f"  - Phase 3.9 Risk-Adjusted: 3 ratios (Sharpe, Sortino, Calmar)")
         return metrics
+
+    def calculate_conviction_score(
+        self,
+        value_score: float,
+        quality_score: float,
+        momentum_score: float,
+        growth_score: float
+    ) -> float:
+        """
+        Calculate conviction score based on 4 factor score agreement
+
+        Conviction Score measures how much the 4 factors agree with each other.
+        Lower standard deviation = higher conviction (factors pointing same direction)
+
+        Args:
+            value_score: Value factor score (0-100)
+            quality_score: Quality factor score (0-100)
+            momentum_score: Momentum factor score (0-100)
+            growth_score: Growth factor score (0-100)
+
+        Returns:
+            conviction_score: 0-100 (higher = more factor agreement)
+
+        Logic:
+            - Base conviction from std: lower std = higher conviction
+            - std=0 -> 100 points, std=25 -> 0 points
+            - Direction bonus: extreme average (high or low) gets bonus
+        """
+        import numpy as np
+
+        scores = [
+            float(value_score or 50),
+            float(quality_score or 50),
+            float(momentum_score or 50),
+            float(growth_score or 50)
+        ]
+
+        mean_score = np.mean(scores)
+        std_score = np.std(scores)
+
+        # Base conviction from std: lower std = higher conviction
+        # std=0 -> 100, std=25 -> 0
+        base_conviction = max(0, 100 - std_score * 4)
+
+        # Direction bonus: extreme average (high or low) gets bonus
+        # avg=50 -> 0 bonus, avg=75 or avg=25 -> 12.5 bonus
+        direction_bonus = abs(mean_score - 50) * 0.5
+
+        # Final conviction score
+        conviction = min(100, base_conviction * 0.8 + direction_bonus)
+
+        logger.debug(
+            f"Conviction Score: {conviction:.1f} "
+            f"(mean={mean_score:.1f}, std={std_score:.1f}, base={base_conviction:.1f}, bonus={direction_bonus:.1f})"
+        )
+
+        return round(conviction, 2)
 
     def close(self):
         """Close database connection"""

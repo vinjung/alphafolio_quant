@@ -14,6 +14,11 @@ Strategy:
 - Sub-sector differentiation (Big Pharma / Biotech / Medical Services / Medical Devices)
 - Adjust factor weights by sub-sector
 
+Phase 3.2 Addition:
+- Cash Runway Filter for Biotech crash avoidance
+- Penalize stocks with < 12 months cash runway
+- Data: us_balance_sheet.cash_and_cash_equivalents_at_carrying_value, us_cash_flow.operating_cashflow
+
 Target: Healthcare IC 0.119 -> 0.160 (+34% improvement)
 
 File: us/us_healthcare_optimizer.py
@@ -46,6 +51,16 @@ class USHealthcareOptimizer:
         self.BIG_PHARMA_MARKET_CAP = 50_000_000_000  # 50B USD
         self.BIG_PHARMA_RD_RATIO = 0.20  # 20%
         self.BIOTECH_REVENUE = 500_000_000  # 500M USD
+
+        # Phase 3.2: Cash Runway thresholds (months)
+        self.CASH_RUNWAY_CRITICAL = 6       # < 6 months = critical risk
+        self.CASH_RUNWAY_HIGH_RISK = 12     # 6-12 months = high risk
+        self.CASH_RUNWAY_CAUTION = 24       # 12-24 months = caution
+
+        # Phase 3.2: Cash Runway penalty points
+        self.PENALTY_CRITICAL = 25.0        # -25 points for < 6 months
+        self.PENALTY_HIGH_RISK = 15.0       # -15 points for 6-12 months
+        self.PENALTY_CAUTION = 5.0          # -5 points for 12-24 months
 
     async def classify_healthcare_subsector(
         self,
@@ -234,6 +249,209 @@ class USHealthcareOptimizer:
         # score should be in 0-100 range (since weights sum to 1.0 and factor scores are 0-100)
 
         return score, weights
+
+    # =========================================================================
+    # Phase 3.2: Cash Runway Filter (Biotech Crash Avoidance)
+    # =========================================================================
+
+    async def calculate_cash_runway(
+        self,
+        symbol: str,
+        db,
+        analysis_date: date
+    ) -> Optional[Dict]:
+        """
+        Calculate Cash Runway for a stock (Phase 3.2).
+
+        Formula: Cash Runway = Cash / |Quarterly OCF Burn| * 3 months
+
+        Data Sources:
+        - us_balance_sheet.cash_and_cash_equivalents_at_carrying_value
+        - us_cash_flow.operating_cashflow
+
+        Returns:
+            Dict with:
+            - runway_months: Cash runway in months (None if positive OCF)
+            - cash: Latest cash position ($)
+            - quarterly_burn: Quarterly cash burn (negative OCF)
+            - is_burning: True if OCF is negative
+            - risk_level: CRITICAL/HIGH_RISK/CAUTION/NORMAL
+        """
+
+        try:
+            # Fetch latest balance sheet (cash position)
+            bs_query = """
+            SELECT
+                cash_and_cash_equivalents_at_carrying_value as cash,
+                fiscal_date_ending as data_date
+            FROM us_balance_sheet
+            WHERE symbol = $1
+              AND fiscal_date_ending <= $2
+            ORDER BY fiscal_date_ending DESC
+            LIMIT 1
+            """
+
+            # Fetch latest cash flow (operating cash flow)
+            cf_query = """
+            SELECT
+                operating_cashflow as ocf,
+                fiscal_date_ending as data_date
+            FROM us_cash_flow
+            WHERE symbol = $1
+              AND fiscal_date_ending <= $2
+            ORDER BY fiscal_date_ending DESC
+            LIMIT 1
+            """
+
+            bs_result = await db.execute_query(bs_query, symbol, analysis_date)
+            cf_result = await db.execute_query(cf_query, symbol, analysis_date)
+
+            if not bs_result or not cf_result:
+                logger.debug(f"[{symbol}] Cash Runway: No financial data")
+                return None
+
+            cash = float(bs_result[0]['cash']) if bs_result[0].get('cash') else None
+            ocf = float(cf_result[0]['ocf']) if cf_result[0].get('ocf') else None
+
+            if cash is None or ocf is None:
+                logger.debug(f"[{symbol}] Cash Runway: Missing cash or OCF")
+                return None
+
+            # Check if burning cash (negative OCF)
+            is_burning = ocf < 0
+
+            if not is_burning:
+                return {
+                    'runway_months': None,
+                    'cash': cash,
+                    'quarterly_burn': 0,
+                    'is_burning': False,
+                    'risk_level': 'NORMAL'
+                }
+
+            # Calculate runway: Cash / |Quarterly Burn| * 3 months
+            quarterly_burn = abs(ocf)
+            runway_months = (cash / quarterly_burn) * 3 if quarterly_burn > 0 else float('inf')
+
+            # Determine risk level
+            if runway_months < self.CASH_RUNWAY_CRITICAL:
+                risk_level = 'CRITICAL'
+            elif runway_months < self.CASH_RUNWAY_HIGH_RISK:
+                risk_level = 'HIGH_RISK'
+            elif runway_months < self.CASH_RUNWAY_CAUTION:
+                risk_level = 'CAUTION'
+            else:
+                risk_level = 'NORMAL'
+
+            logger.debug(
+                f"[{symbol}] Cash Runway: {runway_months:.1f}mo "
+                f"(Cash: ${cash/1e6:.1f}M, Burn: ${quarterly_burn/1e6:.1f}M/Q) -> {risk_level}"
+            )
+
+            return {
+                'runway_months': runway_months,
+                'cash': cash,
+                'quarterly_burn': quarterly_burn,
+                'is_burning': True,
+                'risk_level': risk_level
+            }
+
+        except Exception as e:
+            logger.warning(f"[{symbol}] Cash Runway calculation error: {e}")
+            return None
+
+    def get_cash_runway_penalty(
+        self,
+        runway_result: Optional[Dict],
+        subsector: str
+    ) -> Tuple[float, str]:
+        """
+        Get score penalty based on Cash Runway (Phase 3.2).
+
+        Biotech receives full penalty, other Healthcare subsectors get 50% penalty.
+
+        Args:
+            runway_result: Result from calculate_cash_runway()
+            subsector: Healthcare sub-sector (from classify_healthcare_subsector)
+
+        Returns:
+            Tuple[float, str]: (penalty_points, reason)
+        """
+
+        if not runway_result:
+            return (0.0, 'NO_DATA')
+
+        if not runway_result['is_burning']:
+            return (0.0, 'POSITIVE_OCF')
+
+        risk_level = runway_result['risk_level']
+        runway_months = runway_result['runway_months']
+
+        # Determine base penalty
+        if risk_level == 'CRITICAL':
+            base_penalty = self.PENALTY_CRITICAL
+            reason = f"CRITICAL: {runway_months:.0f}mo runway (< 6mo)"
+        elif risk_level == 'HIGH_RISK':
+            base_penalty = self.PENALTY_HIGH_RISK
+            reason = f"HIGH_RISK: {runway_months:.0f}mo runway (6-12mo)"
+        elif risk_level == 'CAUTION':
+            base_penalty = self.PENALTY_CAUTION
+            reason = f"CAUTION: {runway_months:.0f}mo runway (12-24mo)"
+        else:
+            return (0.0, 'NORMAL')
+
+        # Biotech gets full penalty, others get 50%
+        if subsector == 'Biotech':
+            penalty = base_penalty
+            reason = f"BIOTECH_{reason}"
+        else:
+            penalty = base_penalty * 0.5
+            reason = f"NON_BIOTECH_{reason}"
+
+        return (penalty, reason)
+
+    async def evaluate_cash_runway_risk(
+        self,
+        symbol: str,
+        db,
+        analysis_date: date,
+        subsector: str
+    ) -> Dict:
+        """
+        Full Cash Runway risk evaluation (Phase 3.2).
+
+        Combines calculate_cash_runway and get_cash_runway_penalty.
+
+        Args:
+            symbol: Stock symbol
+            db: Database connection
+            analysis_date: Analysis date
+            subsector: Healthcare sub-sector
+
+        Returns:
+            Dict with:
+            - applicable: True (always applicable for Healthcare)
+            - penalty: Score penalty to apply
+            - reason: Explanation
+            - runway_months: Cash runway in months
+            - risk_level: Risk level
+            - cash: Cash position
+            - quarterly_burn: Quarterly cash burn
+        """
+
+        runway_result = await self.calculate_cash_runway(symbol, db, analysis_date)
+        penalty, reason = self.get_cash_runway_penalty(runway_result, subsector)
+
+        return {
+            'applicable': True,
+            'penalty': penalty,
+            'reason': reason,
+            'runway_months': runway_result.get('runway_months') if runway_result else None,
+            'risk_level': runway_result.get('risk_level') if runway_result else None,
+            'cash': runway_result.get('cash') if runway_result else None,
+            'quarterly_burn': runway_result.get('quarterly_burn') if runway_result else None,
+            'is_burning': runway_result.get('is_burning') if runway_result else False
+        }
 
 
 # Validation test (run when module is imported)

@@ -3,11 +3,12 @@ Batch Weight Calculator for Korean Stock Quant Analysis
 Optimized for processing 2800+ stocks with minimal database queries
 
 Key optimization:
-- Phase 1: Calculate common data once (economic cycle, market sentiment, sector cycle)
+- Phase 1: Calculate common data once (economic cycle, market sentiment, sector cycle, scenario stats)
 - Phase 2: Bulk fetch all stock-specific data (4-5 queries for all stocks)
 - Phase 3: Calculate weights using memory operations only (no DB queries)
 
-Performance: 36,400 queries -> ~15 queries (99.96% reduction)
+Performance: 36,400 queries -> ~16 queries (99.96% reduction)
+Scenario stats: 2,763 queries -> 1 query (99.96% reduction)
 """
 
 import os
@@ -653,6 +654,119 @@ class AsyncBatchWeightCalculator:
 
         logger.info(f"Sector cycle calculated for {len(self.common_data['sector_cycle'])} industries")
 
+    async def precompute_scenario_stats(self):
+        """
+        Phase 1-4: Pre-compute scenario statistics for all (industry, score_bucket) combinations
+
+        Optimization:
+        - Before: 2,763 queries (1 per stock) with expensive LATERAL JOIN
+        - After: 1 query for all combinations (~330 rows)
+        - Expected improvement: 99.96% query reduction
+
+        Key: (industry, score_bucket) where score_bucket = floor(final_score / 10) * 10
+        Value: {bullish_count, sideways_count, bearish_count, total_count,
+                bullish_avg, sideways_avg, bearish_avg,
+                bullish_lower, bullish_upper, bearish_lower, bearish_upper,
+                sideways_lower, sideways_upper}
+        """
+        logger.info("Phase 1-4: Pre-computing scenario statistics for all (industry, score_bucket) combinations...")
+
+        query = """
+        WITH similar_cases AS (
+            SELECT
+                d.industry,
+                FLOOR(g.final_score / 10) * 10 as score_bucket,
+                g.symbol,
+                g.date as analysis_date,
+                g.final_score,
+                current_price.close as current_close,
+                future_price.close as future_close,
+                CASE
+                    WHEN future_price.close IS NOT NULL AND current_price.close > 0
+                    THEN (future_price.close - current_price.close) / current_price.close * 100
+                    ELSE NULL
+                END as return_3m
+            FROM kr_stock_grade g
+            JOIN kr_stock_detail d ON g.symbol = d.symbol
+            JOIN kr_intraday_total current_price
+                ON g.symbol = current_price.symbol AND g.date = current_price.date
+            LEFT JOIN LATERAL (
+                SELECT close
+                FROM kr_intraday_total
+                WHERE symbol = g.symbol
+                    AND date >= g.date + INTERVAL '60 days'
+                    AND date <= g.date + INTERVAL '66 days'
+                ORDER BY date
+                LIMIT 1
+            ) future_price ON true
+            WHERE g.date < CURRENT_DATE - INTERVAL '63 days'
+                AND future_price.close IS NOT NULL
+                AND d.industry IS NOT NULL
+        )
+        SELECT
+            industry,
+            score_bucket,
+            COUNT(*) as total_count,
+            COUNT(*) FILTER (WHERE return_3m > 10) as bullish_count,
+            COUNT(*) FILTER (WHERE return_3m BETWEEN -10 AND 10) as sideways_count,
+            COUNT(*) FILTER (WHERE return_3m < -10) as bearish_count,
+            ROUND(AVG(return_3m) FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_avg,
+            ROUND(AVG(return_3m) FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_avg,
+            ROUND(AVG(return_3m) FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_avg,
+            ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_lower,
+            ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m > 10)::numeric, 1) as bullish_upper,
+            ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_lower,
+            ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m < -10)::numeric, 1) as bearish_upper,
+            ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_lower,
+            ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY return_3m)
+                FILTER (WHERE return_3m BETWEEN -10 AND 10)::numeric, 1) as sideways_upper
+        FROM similar_cases
+        GROUP BY industry, score_bucket
+        HAVING COUNT(*) >= 5
+        ORDER BY industry, score_bucket
+        """
+
+        result = await self.execute_query(query)
+
+        # Store as nested dict: {industry: {score_bucket: stats}}
+        scenario_stats = {}
+        for row in result:
+            industry = row['industry']
+            score_bucket = int(row['score_bucket']) if row['score_bucket'] is not None else 50
+
+            if industry not in scenario_stats:
+                scenario_stats[industry] = {}
+
+            scenario_stats[industry][score_bucket] = {
+                'total_count': row['total_count'],
+                'bullish_count': row['bullish_count'] or 0,
+                'sideways_count': row['sideways_count'] or 0,
+                'bearish_count': row['bearish_count'] or 0,
+                'bullish_avg': float(row['bullish_avg']) if row['bullish_avg'] else None,
+                'sideways_avg': float(row['sideways_avg']) if row['sideways_avg'] else None,
+                'bearish_avg': float(row['bearish_avg']) if row['bearish_avg'] else None,
+                'bullish_lower': float(row['bullish_lower']) if row['bullish_lower'] else 10,
+                'bullish_upper': float(row['bullish_upper']) if row['bullish_upper'] else 25,
+                'bearish_lower': float(row['bearish_lower']) if row['bearish_lower'] else -20,
+                'bearish_upper': float(row['bearish_upper']) if row['bearish_upper'] else -10,
+                'sideways_lower': float(row['sideways_lower']) if row['sideways_lower'] else -5,
+                'sideways_upper': float(row['sideways_upper']) if row['sideways_upper'] else 5
+            }
+
+        self.common_data['scenario_stats'] = scenario_stats
+
+        total_combinations = sum(len(buckets) for buckets in scenario_stats.values())
+        logger.info(f"Scenario stats pre-computed: {len(scenario_stats)} industries, {total_combinations} combinations")
+
+    def get_scenario_stats(self):
+        """Get pre-computed scenario statistics (for use after process_all_stocks)"""
+        return self.common_data.get('scenario_stats', {})
+
     # ========================================================================
     # PHASE 2: Bulk Fetch All Stock Data (4-5 queries for all stocks)
     # ========================================================================
@@ -1292,7 +1406,7 @@ class AsyncBatchWeightCalculator:
         # Memory snapshot at start
         self._record_memory_snapshot("Start")
 
-        # Phase 1: Calculate common data (3 methods, ~8 queries)
+        # Phase 1: Calculate common data (4 methods, ~9 queries)
         logger.info(f"\n{'='*80}")
         logger.info("PHASE 1: Calculating common data for all stocks")
         logger.info(f"{'='*80}\n")
@@ -1301,6 +1415,7 @@ class AsyncBatchWeightCalculator:
         await self.calculate_economic_cycle_data()      # 5 queries
         await self.calculate_market_sentiment_data()    # 2 queries (KOSPI, KOSDAQ)
         await self.calculate_sector_cycle_data()        # 1 query
+        await self.precompute_scenario_stats()          # 1 query (Phase 1-4: scenario optimization)
         phase1_end = datetime.now()
 
         phase1_duration = (phase1_end - phase1_start).total_seconds()

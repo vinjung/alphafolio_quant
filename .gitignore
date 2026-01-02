@@ -1,11 +1,34 @@
 # 제외 폴더
+log/
+docs/
+cache/
+.claude/
 kr/result test/
 kr/analysis/
 kr/sql/
 us/result/
+us/result test/
 us/analysis/
 us/sql/
 us/ver_1/
+
+# 제외 파일
+.clinerules
+kr_SQL_table_info.csv
+us_SQL_table_info.csv
+kr/market_classification_cache.json
+us/us_market_classification_cache.json
+migrate_final_grade.py
+
+# Core Factor Files (Private)
+kr/kr_value_factor.py
+kr/kr_quality_factor.py
+kr/kr_momentum_factor.py
+kr/kr_growth_factor.py
+us/us_value_factor.py
+us/us_quality_factor.py
+us/us_momentum_factor.py
+us/us_growth_factor.py
 
 # Python
 __pycache__/

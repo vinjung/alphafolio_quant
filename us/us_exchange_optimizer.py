@@ -27,18 +27,11 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from datetime import date
 
-try:
-    from .config.weight_adjustments import (
-        EXCHANGE_ADJUSTMENTS,
-        get_exchange_adjustment,
-        calculate_adjusted_weights,
-    )
-except ImportError:
-    from config.weight_adjustments import (
-        EXCHANGE_ADJUSTMENTS,
-        get_exchange_adjustment,
-        calculate_adjusted_weights,
-    )
+from weight_adjustments import (
+    EXCHANGE_ADJUSTMENTS,
+    get_exchange_adjustment,
+    calculate_adjusted_weights,
+)
 
 logging.basicConfig(
     level=logging.INFO,
