@@ -1,0 +1,65 @@
+﻿category,metric,period,value,benchmark,diff,status,recommendation
+factor_ic,value_score_ic,3d,0.04205856152524431,0.05,-0.007941438474755695,GOOD,Maintain
+factor_ic,value_score_ic,30d,0.06931449768152091,0.05,0.01931449768152091,GOOD,Maintain
+factor_ic,value_score_ic,60d,0.08468067514381776,0.05,0.03468067514381776,GOOD,Maintain
+factor_ic,value_score_ic,90d,0.10272355980227219,0.05,0.05272355980227218,GOOD,Maintain
+factor_ic,quality_score_ic,3d,0.025375770344489748,0.05,-0.024624229655510255,WARNING,Review weight
+factor_ic,quality_score_ic,30d,0.03129700793261148,0.05,-0.01870299206738852,GOOD,Maintain
+factor_ic,quality_score_ic,60d,0.028810140745215932,0.05,-0.02118985925478407,WARNING,Review weight
+factor_ic,quality_score_ic,90d,0.03743750068952395,0.05,-0.012562499310476052,GOOD,Maintain
+factor_ic,momentum_score_ic,3d,0.018498554029851327,0.05,-0.03150144597014867,WARNING,Review weight
+factor_ic,momentum_score_ic,30d,-0.02870404836138774,0.05,-0.07870404836138774,CRITICAL,Review weight
+factor_ic,momentum_score_ic,60d,-0.02142646272926551,0.05,-0.0714264627292655,CRITICAL,Review weight
+factor_ic,momentum_score_ic,90d,0.099980092760164,0.05,0.04998009276016399,GOOD,Maintain
+factor_ic,growth_score_ic,3d,0.06714154089737695,0.05,0.017141540897376947,GOOD,Maintain
+factor_ic,growth_score_ic,30d,0.2321177105494429,0.05,0.18211771054944292,GOOD,Maintain
+factor_ic,growth_score_ic,60d,0.3625636539948441,0.05,0.3125636539948441,GOOD,Maintain
+factor_ic,growth_score_ic,90d,0.4803889109328308,0.05,0.4303889109328308,GOOD,Maintain
+factor_ic,final_score_ic,3d,0.054442960909067944,0.05,0.004442960909067942,GOOD,Maintain
+factor_ic,final_score_ic,30d,0.1656283390427645,0.05,0.1156283390427645,GOOD,Maintain
+factor_ic,final_score_ic,60d,0.2458017747114231,0.05,0.19580177471142307,GOOD,Maintain
+factor_ic,final_score_ic,90d,0.3331077487830875,0.05,0.28310774878308753,GOOD,Maintain
+factor_ic,sector_rotation_score_ic,3d,0.02319055717463206,0.05,-0.026809442825367943,WARNING,Review weight
+factor_ic,sector_rotation_score_ic,30d,0.03140189060091152,0.05,-0.018598109399088486,GOOD,Maintain
+factor_ic,sector_rotation_score_ic,60d,0.06378103377578054,0.05,0.013781033775780535,GOOD,Maintain
+factor_ic,sector_rotation_score_ic,90d,0.09354324285240771,0.05,0.04354324285240771,GOOD,Maintain
+factor_ic,factor_combination_bonus_ic,3d,0.03776080704802424,0.05,-0.012239192951975765,GOOD,Maintain
+factor_ic,factor_combination_bonus_ic,30d,0.15693608887720062,0.05,0.10693608887720062,GOOD,Maintain
+factor_ic,factor_combination_bonus_ic,60d,0.2277728711006326,0.05,0.1777728711006326,GOOD,Maintain
+factor_ic,factor_combination_bonus_ic,90d,0.2970141860735896,0.05,0.2470141860735896,GOOD,Maintain
+grade_performance,매수_return,3d,0.7447850520321692,0.0,0.7447850520321692,WARNING,Adjust threshold
+grade_performance,중립_return,3d,0.24907138001030016,0.0,0.24907138001030016,WARNING,Adjust threshold
+grade_performance,매도_return,3d,-0.3118076223515183,0.0,-0.3118076223515183,WARNING,Adjust threshold
+grade_performance,매수_return,30d,6.589619879930892,0.0,6.589619879930892,GOOD,Maintain
+grade_performance,중립_return,30d,1.2109207852115056,0.0,1.2109207852115056,WARNING,Adjust threshold
+grade_performance,매도_return,30d,-1.7428296799194365,0.0,-1.7428296799194365,WARNING,Adjust threshold
+grade_performance,매수_return,60d,11.430236562027764,0.0,11.430236562027764,GOOD,Maintain
+grade_performance,중립_return,60d,2.9655961628928322,0.0,2.9655961628928322,WARNING,Adjust threshold
+grade_performance,매도_return,60d,-3.080680178808155,0.0,-3.080680178808155,WARNING,Adjust threshold
+grade_performance,매수_return,90d,18.177410745229658,0.0,18.177410745229658,GOOD,Maintain
+grade_performance,중립_return,90d,4.688565392611163,0.0,4.688565392611163,WARNING,Adjust threshold
+grade_performance,매도_return,90d,-9.95507023047421,0.0,-9.95507023047421,WARNING,Adjust threshold
+grade_performance,monotonicity,3d,1.0,0.9,0.09999999999999998,GOOD,Maintain
+grade_performance,monotonicity,30d,1.0,0.9,0.09999999999999998,GOOD,Maintain
+grade_performance,monotonicity,60d,1.0,0.9,0.09999999999999998,GOOD,Maintain
+grade_performance,monotonicity,90d,1.0,0.9,0.09999999999999998,GOOD,Maintain
+portfolio,long_sharpe,3d,1.0372829018499805,1.0,0.03728290184998051,GOOD,Maintain
+portfolio,short_sharpe,3d,0.6366670123789285,1.0,-0.36333298762107147,GOOD,Maintain
+portfolio,long_short_sharpe,3d,1.1961144359326439,1.0,0.19611443593264388,GOOD,Maintain
+portfolio,long_sharpe,30d,0.6880776809642914,1.0,-0.31192231903570855,GOOD,Maintain
+portfolio,short_sharpe,30d,0.26229330691120034,1.0,-0.7377066930887997,WARNING,Review strategy
+portfolio,long_short_sharpe,30d,0.7104634258801196,1.0,-0.28953657411988043,GOOD,Maintain
+portfolio,long_sharpe,60d,0.6521596746495667,1.0,-0.3478403253504333,GOOD,Maintain
+portfolio,short_sharpe,60d,0.1390205638649801,1.0,-0.8609794361350199,WARNING,Review strategy
+portfolio,long_short_sharpe,60d,0.5227432416862058,1.0,-0.4772567583137942,GOOD,Maintain
+portfolio,long_sharpe,90d,0.647457499862211,1.0,-0.352542500137789,GOOD,Maintain
+portfolio,short_sharpe,90d,0.3365884472854906,1.0,-0.6634115527145095,WARNING,Review strategy
+portfolio,long_short_sharpe,90d,0.7261219534317448,1.0,-0.2738780465682552,GOOD,Maintain
+risk,var_95_exceedance,all,0.1252486900502117,0.050000000000000044,0.07524869005021165,CRITICAL,Recalibrate risk model
+risk,cvar_95_exceedance,all,0.05000018220312733,0.050000000000000044,1.822031272871727e-07,GOOD,Maintain
+risk,var_95_exceedance,all,0.3901163397873718,0.050000000000000044,0.34011633978737177,CRITICAL,Recalibrate risk model
+risk,cvar_95_exceedance,all,0.05000355079516925,0.050000000000000044,3.5507951692062556e-06,GOOD,Maintain
+risk,var_95_exceedance,all,0.45762045971938925,0.050000000000000044,0.4076204597193892,CRITICAL,Recalibrate risk model
+risk,cvar_95_exceedance,all,0.05000834189947742,0.050000000000000044,8.341899477376513e-06,GOOD,Maintain
+risk,var_95_exceedance,all,0.4965025817026156,0.050000000000000044,0.44650258170261553,CRITICAL,Recalibrate risk model
+risk,cvar_95_exceedance,all,0.05000269328141713,0.050000000000000044,2.6932814170821384e-06,GOOD,Maintain
