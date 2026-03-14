@@ -1,4 +1,4 @@
-# 떡상 - Quant Engine(www.dducksang.com)
+# Quant Engine
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.128-009688?logo=fastapi&logoColor=white)
@@ -6,7 +6,7 @@
 ![asyncpg](https://img.shields.io/badge/asyncpg-async-blue)
 ![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)
 
-시나리오 기반 주식 투자 전략 서비스 "떡상"의 **멀티팩터 퀀트 분석 엔진**입니다.
+시나리오 기반 주식 투자 전략 서비스 **멀티팩터 퀀트 분석 엔진**입니다.
 
 ---
 
@@ -44,9 +44,7 @@
 
 | 저장소 | 설명 | 기술 스택 |
 |--------|------|-----------|
-| [**overview**](https://github.com/vinjung/alphafolio_overview) | 프로젝트 설명 | - |
-| [**client**](https://github.com/vinjung/alphafolio_client) | Frontend (UI/UX) (현재 저장소)  | Next.js 15, React 19, Tailwind CSS 4, Redis |
-| [**api**](https://github.com/vinjung/alphafolio_api) | AI 채팅 백엔드 API (현재 저장소) | FastAPI, LangGraph, ChromaDB, Fine-tuned GPT |
+| [**api**](https://github.com/vinjung/alphafolio_api) | AI 채팅 백엔드 API | FastAPI, LangGraph, ChromaDB, Fine-tuned GPT |
 | [**data**](https://github.com/vinjung/alphafolio_data) | 데이터 자동 수집 & 지표 계산 | FastAPI, asyncpg, Cloud Scheduler |
 | [**chat**](https://github.com/vinjung/alphafolio_chat) | AI 비서 개발환경 | LangChain, LangGraph, ChromaDB |
 | [**quant**](https://github.com/vinjung/alphafolio_quant) | **📍 멀티팩터 퀀트 분석 엔진 (현재 저장소)** | NumPy, SciPy, hmmlearn |
@@ -208,16 +206,34 @@ flowchart LR
 | Momentum | 20% |
 | Value | 15% |
 
-### 등급 결정 (6단계)
+### 최종 점수 계산 (IC 기반 가중치)
+
+```
+Final Score = Base Factor Score × 36%
+            + Sector Rotation Score × 25%
+            + Factor Combination Bonus × 39%
+```
+
+- **Base Factor Score**: 4대 팩터 × 동적 가중치 (조건부 중립화 적용 후)
+- IC 양수 지표만 사용 (IC 음수 지표 제거: smart_money -0.0167, volatility_context -0.0194 등)
+- IC 개선: +0.0038 → +0.0600 (+1,479%)
+
+**조건부 중립화 (Phase 6)**: 특정 시장 상태에서 IC가 음수인 팩터를 50점으로 중립화
+- 모멘텀 중립화: 모멘텀형, 역발상, 확장과열 시장
+- 품질 중립화: 침체, 공포, 역발상, 탐욕, 모멘텀폭발 시장
+
+### 등급 결정 (7단계 + 평가 불가)
 
 | 등급 | 조건 |
 |------|------|
-| 강력 매수 | Final Score >= 임계값 AND 필터 3개+ 통과 AND 최적 모멘텀 |
+| 강력 매수 | Final Score >= 임계값 AND 필터 3개+ 통과 AND 최적 모멘텀 (35~50) |
 | 매수 | Final Score >= 임계값 AND 필터 3개+ 통과 |
 | 매수 고려 | Final Score >= 임계값 AND 필터 2개+ 통과 |
 | 중립 | 매수고려 ~ 매도고려 사이 |
-| 매도 고려 | Final Score < 매도고려 임계값 |
-| 매도 | Final Score < 매도 임계값 |
+| 매도 고려 | Final Score < 매도고려 임계값 OR 모멘텀 < 25 |
+| 매도 | Final Score < 매도 임계값 AND 매도 필터 2개+ 통과 |
+| 강력 매도 | Final Score < 매도 임계값 AND 강력매도 조건 3개+/6개 충족 |
+| 평가 불가 | 데이터 부족 OR 신뢰도 < 30 |
 
 ---
 
@@ -265,6 +281,57 @@ flowchart TB
     INT --> TOTAL
 ```
 
+<details>
+<summary><b>US 팩터별 전략 가중치</b></summary>
+
+**Value v2.0** (성장 대비 합리적 가격):
+
+| 전략 | 비중 | 설명 |
+|------|------|------|
+| RV1 | 25% | PEG Ratio |
+| RV2 | 20% | Forward PE Relative |
+| RV3 | 20% | EV/Revenue to Growth |
+| RV4 | 15% | Rule of 40 |
+| RV5 | 10% | FCF Yield Adjusted |
+| RV6 | 10% | Price to Target |
+
+**Quality v2.0** (Management Quality):
+
+| 전략 | 비중 | 설명 |
+|------|------|------|
+| MQ1 | 20% | Gross Margin |
+| MQ2 | 20% | ROIC |
+| MQ3 | 15% | Operating Leverage |
+| MQ4 | 15% | Earnings Quality |
+| MQ5 | 15% | Balance Sheet |
+| MQ6 | 15% | Margin Trend |
+
+**Momentum v3.0** (Long-term Enhanced, 252일 기준):
+
+| 전략 | 비중 | 설명 |
+|------|------|------|
+| EM1 | 15% | Risk-Adjusted Momentum (126일) |
+| EM2 | 15% | Sector Relative Strength (126일) |
+| EM3 | 20% | EPS Estimate Revision |
+| EM4 | 20% | Revenue Estimate Revision |
+| EM6 | 15% | Earnings Momentum |
+| EM8 | 15% | Long-term Price Momentum (252일, IBD RS Style) |
+
+> EM5 (단기 20일 Volume), EM7 (단기 Target Price) 제거. IC 분석: 3일 IC -0.047 (역작동), 252일 IC +0.064 (유효).
+
+**Growth v2.0** (Future Growth):
+
+| 전략 | 비중 | 설명 |
+|------|------|------|
+| FG1 | 20% | Revenue Growth YoY |
+| FG2 | 20% | EPS Growth YoY |
+| FG3 | 20% | Forward Growth |
+| FG4 | 15% | Growth Consistency |
+| FG5 | 15% | Revenue Acceleration |
+| FG6 | 10% | Profit Growth |
+
+</details>
+
 ### Factor Interaction (비선형 관계 해결)
 
 | Term | 이름 | 가중치 | 계산 방식 |
@@ -282,7 +349,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     subgraph Engines["3대 Engine"]
-        EVENT[Event Engine<br/>-15 ~ +15점]
+        EVENT[Event Engine<br/>-20 ~ +20점]
         MACRO[Macro Engine<br/>가중치 조정]
         VOL[Volatility Engine<br/>민감도별 조정]
     end
@@ -308,6 +375,9 @@ flowchart LR
 | Put/Call < 0.5 | +3점 | Bullish 센티먼트 |
 | 3+ 경영진 매수 | +10점 | Cluster Buying |
 | CEO 대량 매도 | -5점 | C-level Selling |
+| GEX 음수 (대규모) | -5점 | Gamma Exposure 변동성 위험 (Phase 3.4.2) |
+| 뉴스 센티먼트 부정적 | -3~-5점 | 최근 뉴스 부정 감성 (Phase 3.4.2) |
+| 뉴스 센티먼트 긍정적 | +3점 | 최근 뉴스 긍정 감성 |
 
 </details>
 
@@ -355,15 +425,35 @@ flowchart LR
 
 </details>
 
-### 시장 레짐 감지
+### 시장 레짐 감지 (HMM 3-State)
 
-| 레짐 | 설명 | 가중치 배분 |
-|------|------|-------------|
-| AI_BULL | AI 주도 성장주 랠리 | Momentum 35%, Growth 30% |
-| TIGHTENING | 금리 인상/긴축 | Quality 40%, Value 30% |
-| RECOVERY | 경기 회복기 | Value 30%, Momentum 30% |
-| CRISIS | 위기/급락장 | Quality 50%, Value 25% |
-| NEUTRAL | 혼조장/중립 | 균형 배분 (25% 각) |
+Hidden Markov Model 기반 3-State 레짐 감지 (v4.0). 4차원 Composite Score (유동성, 매크로, 변동성, 리스크 선호도) 기반.
+
+| 레짐 | 설명 | Growth | Momentum | Quality | Value |
+|------|------|--------|----------|---------|-------|
+| **BULL** | 강세장 (Low Vol + Positive Return) | 35% | 25% | 20% | 20% |
+| **NEUTRAL** | 중립장 (Mixed Signals) | 28% | 20% | 27% | 25% |
+| **BEAR** | 약세장 (High Vol + Negative Return) | 20% | 10% | 40% | 30% |
+
+**4차원 Composite Score**:
+- Liquidity Score: Fed RRP, SPX Volume, Credit Spread
+- Macro Score: Fed Rate, CPI, Yield Curve, MOVE Index, DXY
+- Volatility Score: VIX, IV Percentile, HV 20d
+- Risk Appetite Score: Put/Call Ratio, IV Skew, News Sentiment
+
+### US 등급 결정 (절대 점수 기반 7단계)
+
+| 등급 | 점수 기준 |
+|------|----------|
+| 강력 매수 | >= 85 |
+| 매수 | 75 ~ 85 |
+| 매수 고려 | 65 ~ 75 |
+| 중립 | 55 ~ 65 |
+| 매도 고려 | 45 ~ 55 |
+| 매도 | 35 ~ 45 |
+| 강력 매도 | < 35 |
+
+> KR은 시장 레짐별 동적 임계값 사용 (PANIC/FEAR/NEUTRAL/GREED/OVERHEATED별 다른 기준), US는 절대 점수 기반.
 
 ### 거래소/섹터별 최적화
 
@@ -451,12 +541,92 @@ flowchart LR
 
 | 지표 | 설명 |
 |------|------|
-| VaR 95% | Value at Risk |
-| CVaR 95% | Conditional VaR |
-| MDD | 최대 낙폭 (1년) |
+| VaR 95% | Value at Risk (일간) |
+| CVaR 95% / CVaR 99% | Conditional VaR (극단 손실 평균) |
+| VaR 60일 | 기간별 VaR (Hurst Exponent 기반 스케일링) |
+| MDD 1년 | 최대 낙폭 |
 | Beta | 시장 민감도 |
+| Tail Beta | 극단 하락장 민감도 (하위 5% 수익률 기준) |
 | Sharpe Ratio | 위험조정수익률 |
 | Sortino Ratio | 하락 위험조정수익률 |
+| Hurst Exponent | 추세 지속성 (0.5 미만: 평균회귀, 0.5 초과: 추세 지속) |
+| Correlation (KOSPI/SPY) | 시장 상관계수 |
+| Drawdown Duration | 평균 낙폭 지속 기간 (일) |
+| Confidence Score | 데이터 충분성 기반 분석 신뢰도 (0~100) |
+| Conviction Score | 팩터 점수 합의도 (표준편차 기반) |
+
+</details>
+
+<details>
+<summary><b>등급 결정용 필터 지표</b></summary>
+
+| 지표 | 설명 | 사용 |
+|------|------|------|
+| SuperTrend Signal | 90일 추세 판별 (매수/보유/매도) | 매수 필터 2 |
+| Relative Strength | 90일 상대 강도 (벤치마크 대비 %) | 매수 필터 3 |
+| Smart Money Score | 외국인/기관 수급 기반 점수 | 복합 보정 |
+| Sector Rotation Signal | 업종 내 상대 강도 | Selection Score 반영 |
+| Factor Combination Bonus | 다중 팩터 시너지 보너스 | 최종 점수 보정 |
+
+</details>
+
+<details>
+<summary><b>ORS (Outlier Risk Score)</b></summary>
+
+4가지 요소 × 25점 = 100점 만점. 이상치 종목을 포지션 사이징 및 리스크 플래그에 활용합니다.
+
+**KR ORS 기준**:
+
+| 요소 | 극위험 (25점) | 고위험 (20점) | 중위험 (15점) | 주의 (5점) |
+|------|-------------|-------------|-------------|----------|
+| 가격 | < 500원 | < 1,000원 | < 2,000원 | < 5,000원 |
+| 유동성 | 거래대금 < 1억원 | < 5억원 | - | - |
+| 변동성 | 연환산 > 80% | > 60% | > 45% | - |
+| 시가총액 | < 500억원 | < 2,000억원 | < 5,000억원 | - |
+
+**US ORS 기준**:
+
+| 요소 | 극위험 (25점) | 고위험 (20점) |
+|------|-------------|-------------|
+| 가격 | < $1 | < $5 (Penny Stock) |
+| 거래량 | < 50K | < 100K avg volume |
+| 변동성 | 연환산 > 150% | > 100% |
+| 시가총액 | < $100M | < $300M |
+
+**Risk Flags**: `EXTREME_RISK` (ORS ≥ 60), `HIGH_RISK` (≥ 40), `MODERATE_RISK` (≥ 20), `NORMAL` (< 20)
+
+</details>
+
+<details>
+<summary><b>대안 종목 매칭</b></summary>
+
+매도/매도 고려 등급 종목에 대해 동일 업종 내 매수등급 대안 종목을 자동 추천합니다.
+
+**매칭 우선순위**:
+1. 동일 테마 (KR) / 동일 산업 (US)
+2. 동일 업종 / 동일 섹터
+3. 전체 종목
+
+**저장 필드** (`kr_stock_grade` / `us_stock_grade`):
+- `alt_symbol`, `alt_stock_name`, `alt_final_grade`, `alt_final_score`, `alt_match_type`, `alt_reasons`
+
+</details>
+
+<details>
+<summary><b>IC 모니터링 (US)</b></summary>
+
+60일 지연 IC와 팩터 스프레드를 모니터링하여 모델 유효성을 검증합니다.
+
+**IC 건강도 임계값**:
+
+| 상태 | IC 범위 | 설명 |
+|------|---------|------|
+| HEALTHY | >= 0.08 | 양호 |
+| DEGRADED | 0.05 ~ 0.08 | 주의 |
+| CRITICAL | 0.02 ~ 0.05 | 위험 |
+| FAILED | < 0.02 | 무효 |
+
+**팩터 스프레드**: Normal (30-40점), Compressed < 25점 (Crowding), Expanded > 45점
 
 </details>
 
@@ -467,7 +637,7 @@ flowchart LR
 | 항목 | 한국 | 미국 |
 |------|------|------|
 | 분석 대상 | ~2,748 종목 | ~4,500 종목 |
-| 배치 크기 | 20 종목/배치 | 20 종목/배치 |
+| 배치 크기 | 20 종목/배치 | 25 종목/배치 |
 | DB 연결 풀 | 10~45 connections | 10~30 connections |
 | 평균 처리 시간 | ~10-15분 | ~15-20분 |
 
@@ -478,7 +648,6 @@ flowchart LR
 ```
 quant/
 ├── app.py                      # FastAPI 서버 (Railway 배포용)
-├── Procfile                    # Railway 실행 명령
 ├── requirements.txt            # Python 의존성
 ├── kr_prediction_collector.py  # 한국 예측 적중률 수집기
 ├── us_prediction_collector.py  # 미국 예측 적중률 수집기
@@ -493,6 +662,7 @@ quant/
 │   ├── kr_quality_factor.py    # Quality 팩터 (17개 전략)
 │   ├── kr_momentum_factor.py   # Momentum 팩터 (23개 전략)
 │   ├── kr_growth_factor.py     # Growth 팩터 (18개 전략)
+│   ├── kr_etc_factor.py        # 기타 팩터 (섹터별 특화 리스크 조정)
 │   ├── kr_additional_metrics.py # 리스크/Agent 지표
 │   ├── kr_interpretation.py    # 텍스트 해석 생성
 │   ├── kr_alternative_matcher.py # 대안 종목 매칭
@@ -505,7 +675,7 @@ quant/
 │   ├── us_main.py              # 메인 실행 & run_option1() API 진입점
 │   ├── us_db_async.py          # 비동기 DB 커넥션 풀
 │   ├── weight_adjustments.py   # 동적 가중치 조정
-│   ├── us_market_regime.py     # 시장 레짐 감지 (5개 레짐)
+│   ├── us_market_regime.py     # HMM 시장 레짐 감지 (3-State: BULL/NEUTRAL/BEAR)
 │   ├── us_value_factor.py      # Value 팩터 (VL1-VL6)
 │   ├── us_quality_factor.py    # Quality 팩터 (QA1-QA6)
 │   ├── us_momentum_factor.py   # Momentum 팩터 (MO1-MO6)
@@ -523,12 +693,6 @@ quant/
 │   ├── us_data_prefetcher.py   # 쿼리 최적화
 │   ├── us_outlier_risk.py      # 이상치 리스크 감지
 │   └── us_ic_monitor.py        # IC 모니터링
-│
-├── docs/                       # 설계 문서
-│   ├── 퀀트 배포 api.md        # Railway 배포 설계서
-│   ├── 퀀트 분석 기획.md
-│   ├── 한국 퀀트 모델.md
-│   └── 미국 퀀트 모델.md
 │
 └── cache/                      # 캐시 파일
     └── market_environment_cache.json
